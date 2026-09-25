@@ -566,6 +566,56 @@
 			reader.readAsDataURL(blob);
 		});
 	}
+	var TURN_SELECTORS = [
+		"[data-turn-key]",
+		"[data-testid^=\"conversation-turn-\"]",
+		"[data-turn-id-container]"
+	];
+	var THREAD_SCROLL_SELECTORS = ["[data-app-action-timeline-scroll]", "[data-scroll-root]"];
+	var THREAD_CONTAINER_SELECTORS = [
+		"[data-thread-find-target=\"conversation\"]",
+		"[data-chatgpt-conversation-selection-target]",
+		"#thread"
+	];
+	var MESSAGE_SELECTORS = ["[data-chatgpt-selection-message-id]", "[data-message-id]"];
+	function anyOf(selectors) {
+		return selectors.join(", ");
+	}
+	function queryFirstMatching(root, selectors) {
+		for (const selector of selectors) try {
+			const found = Array.from(root.querySelectorAll(selector));
+			if (found.length > 0) return found;
+		} catch {}
+		return [];
+	}
+	function getConversationTurns(root = document) {
+		return queryFirstMatching(root, TURN_SELECTORS);
+	}
+	function hasRenderedConversation(root = document) {
+		return getConversationTurns(root).length > 0;
+	}
+	function findThreadContainer(turns, root = document) {
+		const marked = queryFirstMatching(root, THREAD_CONTAINER_SELECTORS).find((element) => turns.length === 0 || turns.every((turn) => element.contains(turn)));
+		if (marked) return marked;
+		return findCommonAncestor(turns);
+	}
+	function findCommonAncestor(elements) {
+		let ancestor = elements[0]?.parentElement;
+		while (ancestor && !elements.every((element) => ancestor.contains(element))) ancestor = ancestor.parentElement;
+		return ancestor;
+	}
+	function findScrollRoot(thread) {
+		if (!thread) return null;
+		const marked = thread.closest(anyOf(THREAD_SCROLL_SELECTORS));
+		if (marked) return marked;
+		let element = thread.parentElement;
+		while (element) {
+			const style = typeof getComputedStyle === "function" ? getComputedStyle(element) : null;
+			if (!!style && /auto|scroll/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 4) return element;
+			element = element.parentElement;
+		}
+		return null;
+	}
 	function getChatIdFromUrl() {
 		const match = location.pathname.match(/^\/(?:share(?:\/[a-z]+)?|c|g\/[a-z0-9-]+\/c)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
 		if (match) return match[1];
@@ -592,7 +642,7 @@
 		return defaultAvatar;
 	}
 	function checkIfConversationStarted() {
-		return !!document.querySelector("[data-testid^=\"conversation-turn-\"]");
+		return hasRenderedConversation();
 	}
 	function isCompleteConversation(conversation) {
 		return !!conversation?.mapping && !!conversation.current_node;
@@ -679,6 +729,67 @@
 		}
 		return null;
 	}
+	var DB_NAME = "chatgpt-exporter";
+	var STORE_NAME = "images";
+	var EXPIRY_MS = 2592e6;
+	var dbPromise = null;
+	function promisify(request) {
+		return new Promise((resolve, reject) => {
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+	}
+	function openDb() {
+		dbPromise ??= new Promise((resolve) => {
+			const request = indexedDB.open(DB_NAME, 1);
+			request.onupgradeneeded = () => {
+				request.result.createObjectStore(STORE_NAME).createIndex("savedAt", "savedAt");
+			};
+			request.onsuccess = () => {
+				pruneExpired(request.result);
+				resolve(request.result);
+			};
+			request.onerror = () => resolve(null);
+		}).catch(() => null);
+		return dbPromise;
+	}
+	function pruneExpired(db) {
+		try {
+			const cursorRequest = db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).index("savedAt").openCursor(IDBKeyRange.upperBound(Date.now() - EXPIRY_MS));
+			cursorRequest.onsuccess = () => {
+				const cursor = cursorRequest.result;
+				if (!cursor) return;
+				cursor.delete();
+				cursor.continue();
+			};
+		} catch (error) {
+			console.warn("[Exporter] Failed to prune image cache", error);
+		}
+	}
+	async function getCachedImage(pointer) {
+		try {
+			const db = await openDb();
+			if (!db) return null;
+			const entry = await promisify(db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).get(pointer));
+			if (!entry || Date.now() - entry.savedAt > EXPIRY_MS) return null;
+			return entry.dataUrl;
+		} catch {
+			return null;
+		}
+	}
+	async function setCachedImage(pointer, dataUrl) {
+		try {
+			const db = await openDb();
+			if (!db) return;
+			const entry = {
+				dataUrl,
+				savedAt: Date.now()
+			};
+			await promisify(db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).put(entry, pointer));
+		} catch (error) {
+			console.warn("[Exporter] Failed to cache image", error);
+		}
+	}
 	var generateKey = (args) => JSON.stringify(args);
 	function memorize(fn) {
 		const cache = new Map();
@@ -745,13 +856,22 @@
 		throw new Error("No chat id found.");
 	}
 	async function fetchImageFromPointer(uri) {
+		const cached = await getCachedImage(uri);
+		if (cached) return cached;
 		const imageDetails = await fetchApi(fileDownloadApi(uri.replace("sediment://", "")));
 		if (imageDetails.status === "error") {
 			console.error("Failed to fetch image asset", imageDetails.error_code, imageDetails.error_message);
 			return null;
 		}
 		const image = await fetch(imageDetails.download_url);
-		return (await blobToDataURL(await image.blob())).replace(/^data:.*?;/, `data:${image.headers.get("content-type")};`);
+		const dataUrl = (await blobToDataURL(await image.blob())).replace(/^data:.*?;/, `data:${image.headers.get("content-type")};`);
+		await setCachedImage(uri, dataUrl);
+		return dataUrl;
+	}
+	async function withImageAssets(conversation) {
+		const copy = structuredClone(conversation);
+		await replaceImageAssets(copy);
+		return copy;
 	}
 	async function replaceImageAssets(conversation) {
 		const isMultiModalInputImage = (part) => {
@@ -784,21 +904,17 @@
 			}
 		})]);
 	}
-	async function fetchConversation(chatId, shouldReplaceAssets) {
+	async function fetchConversation(chatId) {
 		if (chatId.startsWith("__share__")) {
 			const id = chatId.replace("__share__", "");
-			const shareConversation = await loadShareConversation(getConversationFromSharePage(), () => fetchApi(shareConversationApi(id)));
-			if (shouldReplaceAssets) await replaceImageAssets(shareConversation);
 			return {
 				id,
-				...shareConversation
+				...await loadShareConversation(getConversationFromSharePage(), () => fetchApi(shareConversationApi(id)))
 			};
 		}
-		const conversation = await fetchApi(conversationApi(chatId));
-		if (shouldReplaceAssets) await replaceImageAssets(conversation);
 		return {
 			id: chatId,
-			...conversation
+			...await fetchApi(conversationApi(chatId))
 		};
 	}
 	async function fetchProjects() {
@@ -830,7 +946,7 @@
 	async function fetchConversationsPage(project, offset, limit) {
 		return fetchConversations(offset, limit, project);
 	}
-	async function fetchAllConversations(project = null, maxConversations = 1e3, onBatch, onHasMore) {
+	async function fetchAllConversations(project = null, maxConversations = 1e3, onBatch, onHasMore, onError) {
 		const conversations = [];
 		const limit = project === null ? 100 : 50;
 		let offset = 0;
@@ -851,6 +967,7 @@
 			else offset += limit;
 		} catch (error) {
 			console.error("Error fetching conversations batch:", error);
+			onError?.(error);
 			break;
 		}
 		const result = conversations.slice(0, maxConversations);
@@ -7853,7 +7970,8 @@
 		"Batch progress": "Batch {{current}}/{{total}}",
 		"All conversations": "All conversations",
 		"Load more conversations": "Load {{n}} more",
-		"Load more conversations remaining": "Load {{n}} more · {{remaining}} left"
+		"Load more conversations remaining": "Load {{n}} more · {{remaining}} left",
+		"Export Skipped Message": "{{n}} conversations failed after repeated retries and are missing from the export:"
 	};
 	var es_default = {
 		title: "ChatGPT Exporter",
@@ -7917,7 +8035,8 @@
 		"Batch progress": "Lote {{current}}/{{total}}",
 		"All conversations": "Todas las conversaciones",
 		"Load more conversations": "Cargar {{n}} más",
-		"Load more conversations remaining": "Cargar {{n}} más · quedan {{remaining}}"
+		"Load more conversations remaining": "Cargar {{n}} más · quedan {{remaining}}",
+		"Export Skipped Message": "{{n}} conversaciones fallaron tras varios reintentos y no están en la exportación:"
 	};
 	var fr_default = {
 		title: "Exportateur ChatGPT",
@@ -7981,7 +8100,8 @@
 		"Batch progress": "Lot {{current}}/{{total}}",
 		"All conversations": "Toutes les conversations",
 		"Load more conversations": "Charger {{n}} de plus",
-		"Load more conversations remaining": "Charger {{n}} de plus · {{remaining}} restantes"
+		"Load more conversations remaining": "Charger {{n}} de plus · {{remaining}} restantes",
+		"Export Skipped Message": "{{n}} conversations ont échoué après plusieurs tentatives et ne figurent pas dans l'export :"
 	};
 	var id_default = {
 		title: "ChatGPT Exporter",
@@ -8045,7 +8165,8 @@
 		"Batch progress": "Kelompok {{current}}/{{total}}",
 		"All conversations": "Semua percakapan",
 		"Load more conversations": "Muat {{n}} lagi",
-		"Load more conversations remaining": "Muat {{n}} lagi · tersisa {{remaining}}"
+		"Load more conversations remaining": "Muat {{n}} lagi · tersisa {{remaining}}",
+		"Export Skipped Message": "{{n}} percakapan gagal setelah beberapa kali dicoba ulang dan tidak ada dalam ekspor:"
 	};
 	var jp_default = {
 		title: "ChatGPTエクスポーター",
@@ -8109,7 +8230,8 @@
 		"Batch progress": "バッチ {{current}}/{{total}}",
 		"All conversations": "すべての会話",
 		"Load more conversations": "さらに {{n}} 件読み込む",
-		"Load more conversations remaining": "さらに {{n}} 件読み込む · 残り {{remaining}} 件"
+		"Load more conversations remaining": "さらに {{n}} 件読み込む · 残り {{remaining}} 件",
+		"Export Skipped Message": "{{n}} 件の会話は再試行しても失敗したため、エクスポートに含まれていません："
 	};
 	var ru_default = {
 		title: "ChatGPT Exporter",
@@ -8173,7 +8295,8 @@
 		"Batch progress": "Партия {{current}}/{{total}}",
 		"All conversations": "Все разговоры",
 		"Load more conversations": "Загрузить ещё {{n}}",
-		"Load more conversations remaining": "Загрузить ещё {{n}} · осталось {{remaining}}"
+		"Load more conversations remaining": "Загрузить ещё {{n}} · осталось {{remaining}}",
+		"Export Skipped Message": "{{n}} разговоров не удалось загрузить после нескольких попыток, они отсутствуют в экспорте:"
 	};
 	var tr_default = {
 		title: "ChatGPT Exporter",
@@ -8237,7 +8360,8 @@
 		"Batch progress": "Grup {{current}}/{{total}}",
 		"All conversations": "Tüm konuşmalar",
 		"Load more conversations": "{{n}} tane daha yükle",
-		"Load more conversations remaining": "{{n}} tane daha yükle · {{remaining}} kaldı"
+		"Load more conversations remaining": "{{n}} tane daha yükle · {{remaining}} kaldı",
+		"Export Skipped Message": "{{n}} konuşma tekrar denemelere rağmen başarısız oldu ve dışa aktarımda yer almıyor:"
 	};
 	var zh_Hans_default = {
 		title: "ChatGPT Exporter",
@@ -8301,7 +8425,8 @@
 		"Batch progress": "第 {{current}}/{{total}} 批",
 		"All conversations": "全部对话",
 		"Load more conversations": "再加载 {{n}} 条",
-		"Load more conversations remaining": "再加载 {{n}} 条 · 剩余 {{remaining}} 条"
+		"Load more conversations remaining": "再加载 {{n}} 条 · 剩余 {{remaining}} 条",
+		"Export Skipped Message": "有 {{n}} 个对话多次重试后仍失败，未包含在导出文件中："
 	};
 	var zh_Hant_default = {
 		title: "ChatGPT Exporter",
@@ -8365,7 +8490,8 @@
 		"Batch progress": "第 {{current}}/{{total}} 批",
 		"All conversations": "全部對話",
 		"Load more conversations": "再載入 {{n}} 筆",
-		"Load more conversations remaining": "再載入 {{n}} 筆 · 剩餘 {{remaining}} 筆"
+		"Load more conversations remaining": "再載入 {{n}} 筆 · 剩餘 {{remaining}} 筆",
+		"Export Skipped Message": "有 {{n}} 個對話重試多次仍失敗，沒有包含在匯出檔中："
 	};
 	var GMStorage = class {
 		static supported = typeof _GM_getValue === "function" && typeof _GM_setValue === "function" && typeof _GM_deleteValue === "function";
@@ -18773,7 +18899,7 @@
 		}
 		const userAvatar = await getUserAvatar();
 		const chatId = await getCurrentChatId();
-		const conversation = processConversation(await fetchConversation(chatId, true), { enableThinking: ScriptStorage.get("exporter:enable_thinking") ?? false });
+		const conversation = processConversation(await withImageAssets(await fetchConversation(chatId)), { enableThinking: ScriptStorage.get("exporter:enable_thinking") ?? false });
 		const html = conversationToHtml(conversation, userAvatar, metaList);
 		downloadFile(getFileNameWithFormat(fileNameFormat, "html", {
 			title: conversation.title,
@@ -19080,6 +19206,10 @@
 	}
 	var MAX_SCREENSHOT_DIMENSION = 16e3;
 	var MAX_TILE_PIXELS = 16e6;
+	var VIRTUALIZED_TURN_SELECTOR = "[data-turn-id-container][data-is-intersecting], [data-turn-key]";
+	function turnContainerId(element) {
+		return element.dataset.turnIdContainer ?? element.dataset.turnKey;
+	}
 	function scrollElementWithinRoot(scrollRoot, target, block) {
 		const scrollRect = scrollRoot.getBoundingClientRect();
 		const targetRect = target.getBoundingClientRect();
@@ -19088,31 +19218,27 @@
 		scrollRoot.scrollTop = Math.max(0, Math.min(scrollRoot.scrollHeight - scrollRoot.clientHeight, scrollRoot.scrollTop + offset - alignment));
 		scrollRoot.dispatchEvent(new Event("scroll", { bubbles: true }));
 	}
-	function findCommonAncestor(elements) {
-		let ancestor = elements[0]?.parentElement;
-		while (ancestor && !elements.every((element) => ancestor.contains(element))) ancestor = ancestor.parentElement;
-		return ancestor;
-	}
 	async function exportToPng(fileNameFormat) {
 		if (!checkIfConversationStarted()) {
 			alert(i18n_default.t("Please start a conversation first"));
 			return false;
 		}
 		const effect = new Effect();
-		const conversationTurns = Array.from(document.querySelectorAll("#thread [data-testid^=\"conversation-turn-\"]"));
-		const thread = findCommonAncestor(conversationTurns);
+		const conversationTurns = getConversationTurns(document).filter((turn) => turn.closest("main"));
+		const thread = findThreadContainer(conversationTurns, document);
 		if (!thread || thread.children.length === 0 || thread.scrollHeight < 50) {
 			alert(i18n_default.t("Failed to export to PNG. Failed to find the element node."));
 			return false;
 		}
 		const isDarkMode = document.documentElement.classList.contains("dark");
 		const threadEl = thread;
-		const turnContainerIds = Array.from(threadEl.querySelectorAll("[data-turn-id-container][data-is-intersecting]")).filter((element) => !!element.querySelector("[data-testid^=\"conversation-turn-\"]") || element.offsetHeight > 0 || !!element.style.getPropertyValue("--last-known-height")).map((element) => element.dataset.turnIdContainer).filter((id) => !!id && id !== "client-created-root");
+		const turnContainerIds = Array.from(threadEl.querySelectorAll(VIRTUALIZED_TURN_SELECTOR)).filter((element) => !!element.querySelector(anyOf(TURN_SELECTORS)) || element.offsetHeight > 0 || !!element.style.getPropertyValue("--last-known-height")).map((element) => turnContainerId(element)).filter((id) => !!id && id !== "client-created-root");
 		effect.add(() => {
 			threadEl.setAttribute("data-chatgpt-exporter-screenshot-root", "");
 			const style = document.createElement("style");
 			style.textContent = `
             [data-chatgpt-exporter-screenshot-root],
+            [data-chatgpt-exporter-screenshot-root] [data-turn-key],
             #thread [data-testid^="conversation-turn-"] {
                 color: ${isDarkMode ? "#ececec" : "#0d0d0d"};
                 background-color: ${isDarkMode ? "#212121" : "#fff"};
@@ -19137,7 +19263,7 @@
             /* date separators such as "Yesterday 10:08 AM" */
             [data-chatgpt-exporter-screenshot-root] [role="separator"],
             /* any other elements that are not conversation turns */
-            [data-chatgpt-exporter-screenshot-root] > :not([data-turn-id-container]):not([data-testid^="conversation-turn-"]):not(:has([data-testid^="conversation-turn-"])),
+            [data-chatgpt-exporter-screenshot-root] > :not([data-turn-id-container]):not([data-turn-key]):not([data-testid^="conversation-turn-"]):not(:has([data-turn-key])):not(:has([data-testid^="conversation-turn-"])),
             /* hide back to top button */
             button.absolute,
             /* question button */
@@ -19146,6 +19272,7 @@
             }
 
             /* Preserve the action row's spacing while hiding its toolbar. */
+            [data-turn-key] [role="group"]:has(button[aria-label]),
             [data-testid^="conversation-turn-"] [role="group"]:has([data-testid="copy-turn-action-button"]),
             /* code block buttons */
             #thread pre button {
@@ -19153,6 +19280,7 @@
             }
 
             /* Later user turns currently have much larger top padding than the first one. */
+            [data-turn-key] > h4 + div,
             [data-testid^="conversation-turn-"][data-turn="user"] > h4 + div {
                 padding-top: 0 !important;
             }
@@ -19163,7 +19291,7 @@
 				threadEl.removeAttribute("data-chatgpt-exporter-screenshot-root");
 			};
 		});
-		const scrollRoot = threadEl.closest("[data-scroll-root]");
+		const scrollRoot = findScrollRoot(threadEl);
 		if (scrollRoot) effect.add(() => {
 			const scrollTop = scrollRoot.scrollTop;
 			const scrollLeft = scrollRoot.scrollLeft;
@@ -19177,20 +19305,20 @@
 		});
 		effect.run();
 		const turnSnapshots = new Map();
-		if (scrollRoot && turnContainerIds.length > 0) for (const turnContainerId of turnContainerIds) {
+		if (scrollRoot && turnContainerIds.length > 0) for (const turnContainerIdValue of turnContainerIds) {
 			for (let pass = 0; pass < 10; pass++) {
-				const container = Array.from(threadEl.querySelectorAll("[data-turn-id-container][data-is-intersecting]")).find((element) => element.dataset.turnIdContainer === turnContainerId);
+				const container = Array.from(threadEl.querySelectorAll(VIRTUALIZED_TURN_SELECTOR)).find((element) => turnContainerId(element) === turnContainerIdValue);
 				if (!container) break;
-				if (container.querySelector("[data-testid^=\"conversation-turn-\"]")) {
-					turnSnapshots.set(turnContainerId, container.cloneNode(true));
+				if (container.querySelector(anyOf(TURN_SELECTORS)) ?? container) {
+					turnSnapshots.set(turnContainerIdValue, container.cloneNode(true));
 					break;
 				}
 				scrollElementWithinRoot(scrollRoot, container, "center");
 				await sleep(250);
 			}
-			if (!turnSnapshots.has(turnContainerId)) {
-				const placeholder = Array.from(threadEl.querySelectorAll("[data-turn-id-container][data-is-intersecting]")).find((element) => element.dataset.turnIdContainer === turnContainerId);
-				if (placeholder) turnSnapshots.set(turnContainerId, placeholder.cloneNode(true));
+			if (!turnSnapshots.has(turnContainerIdValue)) {
+				const placeholder = Array.from(threadEl.querySelectorAll(VIRTUALIZED_TURN_SELECTOR)).find((element) => turnContainerId(element) === turnContainerIdValue);
+				if (placeholder) turnSnapshots.set(turnContainerIdValue, placeholder.cloneNode(true));
 			}
 		}
 		else if (scrollRoot && conversationTurns[0]) {
@@ -19211,8 +19339,8 @@
 			staticThread.style.maxHeight = "none";
 			staticThread.style.overflow = "visible";
 			staticThread.style.pointerEvents = "none";
-			for (const turnContainerId of turnContainerIds) {
-				const snapshot = turnSnapshots.get(turnContainerId);
+			for (const turnContainerIdValue of turnContainerIds) {
+				const snapshot = turnSnapshots.get(turnContainerIdValue);
 				if (snapshot) staticThread.appendChild(snapshot);
 			}
 			effect.add(() => {
@@ -19404,7 +19532,7 @@
 			return false;
 		}
 		const chatId = await getCurrentChatId();
-		const rawConversation = await fetchConversation(chatId, false);
+		const rawConversation = await fetchConversation(chatId);
 		downloadFile(getFileNameWithFormat(fileNameFormat, "json", {
 			title: rawConversation.title || "ChatGPT Conversation",
 			chatId
@@ -19421,7 +19549,7 @@
 			return false;
 		}
 		const chatId = await getCurrentChatId();
-		const conversation = processConversation(await fetchConversation(chatId, false));
+		const conversation = processConversation(await fetchConversation(chatId));
 		downloadFile(getFileNameWithFormat(`${fileNameFormat}.tavern`, "jsonl", {
 			title: conversation.title,
 			chatId
@@ -19438,7 +19566,7 @@
 			return false;
 		}
 		const chatId = await getCurrentChatId();
-		const conversation = processConversation(await fetchConversation(chatId, false));
+		const conversation = processConversation(await fetchConversation(chatId));
 		downloadFile(getFileNameWithFormat(`${fileNameFormat}.ooba`, "json", {
 			title: conversation.title,
 			chatId
@@ -19526,7 +19654,7 @@
 			return false;
 		}
 		const chatId = await getCurrentChatId();
-		const conversation = processConversation(await fetchConversation(chatId, true), { enableThinking: ScriptStorage.get("exporter:enable_thinking") ?? false });
+		const conversation = processConversation(await withImageAssets(await fetchConversation(chatId)), { enableThinking: ScriptStorage.get("exporter:enable_thinking") ?? false });
 		const markdown = conversationToMarkdown(conversation, metaList);
 		downloadFile(getFileNameWithFormat(fileNameFormat, "md", {
 			title: conversation.title,
@@ -19680,7 +19808,7 @@
 			alert(i18n_default.t("Temporary chat could not be captured"));
 			return false;
 		}
-		const { conversationNodes } = processConversation(await fetchConversation(await getCurrentChatId(), false));
+		const { conversationNodes } = processConversation(await fetchConversation(await getCurrentChatId()));
 		copyToClipboard(standardizeLineBreaks(conversationNodes.map(({ message }) => transformMessage(message)).filter(Boolean).join("\n\n")));
 		return true;
 	}
@@ -19779,6 +19907,34 @@
 		return l$5.vnode && l$5.vnode(i), i;
 	}
 	var Divider = () => o$5("div", { className: "h-px bg-token-border-light" });
+	async function refreshConversationList(cached, fetchPage, pageSize, maxItems) {
+		const known = new Map(cached.map((c) => [c.id, c.update_time]));
+		const fresh = [];
+		let total = null;
+		let offset = 0;
+		while (offset < maxItems) {
+			const page = await fetchPage(offset, pageSize);
+			const items = page.items ?? [];
+			total = page.total;
+			const firstUnchanged = items.findIndex((c) => known.has(c.id) && known.get(c.id) === c.update_time);
+			if (firstUnchanged !== -1) {
+				fresh.push(...items.slice(0, firstUnchanged));
+				break;
+			}
+			fresh.push(...items);
+			if (items.length < pageSize) break;
+			offset += pageSize;
+		}
+		return {
+			head: fresh,
+			total
+		};
+	}
+	function applyHead(head, items) {
+		if (head.length === 0) return items;
+		const headIds = new Set(head.map((c) => c.id));
+		return [...head, ...items.filter((c) => !headIds.has(c.id))];
+	}
 	function mitt_default(n) {
 		return {
 			all: n = n || new Map(),
@@ -19809,6 +19965,7 @@
 		eventEmitter = mitt_default();
 		queue = [];
 		results = [];
+		skipped = [];
 		status = "IDLE";
 		backoffMultiplier = 2;
 		backoff;
@@ -19845,12 +20002,16 @@
 			this.runId++;
 			this.queue = [];
 			this.results = [];
+			this.skipped = [];
 			this.status = "IDLE";
 			this.backoff = this.minBackoff;
 			this.pauseUntil = 0;
 			this.batchPauses = 0;
 			this.total = 0;
 			this.completed = 0;
+		}
+		getSkipped() {
+			return this.skipped;
 		}
 		on(event, fn) {
 			this.eventEmitter.on(event, fn);
@@ -19884,6 +20045,7 @@
 				this.progress(name, "processing");
 				this.backoff = this.minBackoff;
 				requestObject.retries = 0;
+				if (requestObject.cached) waitMs = 0;
 			} catch (error) {
 				if (runId !== this.runId) return;
 				if (error instanceof RateLimitError) {
@@ -19900,6 +20062,7 @@
 					requestObject.retries++;
 					if (requestObject.retries > MAX_RETRIES) {
 						console.warn(`[Exporter] "${name}" skipped after ${MAX_RETRIES} retries`);
+						this.skipped.push(name);
 						waitMs = 0;
 					} else {
 						this.backoff = Math.min(this.backoff * this.backoffMultiplier, this.maxBackoff);
@@ -20312,6 +20475,17 @@
 	};
 	var useSettingContext = () => q$1(SettingContext);
 	var exportingRef = { current: false };
+	var conversationCache = new Map();
+	var listCache = null;
+	function dropFromListCache(removed) {
+		if (!listCache) return;
+		const ids = new Set(removed.map((c) => c.id));
+		listCache = {
+			...listCache,
+			items: listCache.items.filter((c) => !ids.has(c.id))
+		};
+	}
+	var MAX_SKIPPED_SHOWN = 20;
 	function toMs(time) {
 		if (time == null) return 0;
 		if (typeof time === "number") return time * 1e3;
@@ -20670,6 +20844,7 @@
 		const batchIndexRef = _$1(0);
 		const totalBatchesRef = _$1(0);
 		const cancelledRef = _$1(false);
+		const skippedRef = _$1([]);
 		const fetchGenRef = _$1(0);
 		const onUpload = T$4((e) => {
 			const file = e.target?.files?.[0];
@@ -20689,10 +20864,23 @@
 		}, [t]);
 		const startApiBatch = T$4((chunk) => {
 			requestQueue.clear();
-			chunk.forEach(({ id, title }) => {
+			chunk.forEach(({ id, title, update_time }) => {
+				const entry = conversationCache.get(id);
+				const cached = entry && entry.updateTime === update_time ? entry.conversation : void 0;
 				requestQueue.add({
 					name: title,
-					request: () => fetchConversation(id, exportType !== "JSON")
+					cached: !!cached,
+					request: async () => {
+						let conversation = cached;
+						if (!conversation) {
+							conversation = await fetchConversation(id);
+							conversationCache.set(id, {
+								updateTime: update_time,
+								conversation
+							});
+						}
+						return exportType === "JSON" ? conversation : withImageAssets(conversation);
+					}
 				});
 			});
 			requestQueue.start();
@@ -20751,12 +20939,21 @@
 					await callback(format, results, metaList, selectedProject?.display.name, partIndex, totalBatches);
 					markExported(results);
 				}
+				skippedRef.current.push(...requestQueue.getSkipped());
 				if (partIndex < totalBatches) {
 					await sleep(400);
 					batchIndexRef.current++;
 					const nextChunk = pendingBatchesRef.current[batchIndexRef.current];
 					if (nextChunk) startApiBatch(nextChunk);
-				} else setProcessing(false);
+				} else {
+					setProcessing(false);
+					const skipped = skippedRef.current;
+					if (skipped.length > 0) {
+						const shown = skipped.slice(0, MAX_SKIPPED_SHOWN).map((name) => `- ${name}`);
+						if (skipped.length > MAX_SKIPPED_SHOWN) shown.push("- …");
+						alert(`${t("Export Skipped Message", { n: skipped.length })}\n\n${shown.join("\n")}`);
+					}
+				}
 			});
 			return () => off();
 		}, [
@@ -20766,12 +20963,14 @@
 			format,
 			metaList,
 			startApiBatch,
-			selectedProject
+			selectedProject,
+			t
 		]);
 		p$6(() => {
 			const off = archiveQueue.on("done", () => {
 				setProcessing(false);
 				setApiConversations((prev) => prev.filter((c) => !selected.some((s) => s.id === c.id)));
+				dropFromListCache(selected);
 				setSelected([]);
 				alert(t("Conversation Archived Message"));
 			});
@@ -20785,6 +20984,7 @@
 			const off = deleteQueue.on("done", () => {
 				setProcessing(false);
 				setApiConversations((prev) => prev.filter((c) => !selected.some((s) => s.id === c.id)));
+				dropFromListCache(selected);
 				setSelected([]);
 				alert(t("Conversation Deleted Message"));
 			});
@@ -20807,6 +21007,7 @@
 		const exportAllFromApi = T$4(() => {
 			if (disabled) return;
 			cancelledRef.current = false;
+			skippedRef.current = [];
 			const chunks = chunkArray(selected, 100);
 			pendingBatchesRef.current = chunks;
 			batchIndexRef.current = 0;
@@ -20916,14 +21117,46 @@
 			const gen = ++fetchGenRef.current;
 			const alive = () => gen === fetchGenRef.current;
 			setSelected([]);
+			const cache = selectedProjectId === null && listCache?.limit === exportAllLimit ? listCache : null;
+			if (cache) {
+				setApiConversations(cache.items);
+				setHasMore(cache.hasMore);
+				setTotalAvailable(cache.total);
+				setLoading(false);
+				refreshConversationList(cache.items, (offset, limit) => fetchConversationsPage(null, offset, limit), 100, exportAllLimit).then(({ head, total }) => {
+					if (listCache) listCache = {
+						...listCache,
+						items: applyHead(head, listCache.items),
+						total: listCache.total !== null ? total : null
+					};
+					if (!alive() || !listCache) return;
+					setApiConversations((prev) => applyHead(head, prev));
+					setTotalAvailable(listCache.total);
+					const byId = new Map(head.map((c) => [c.id, c]));
+					setSelected((prev) => prev.map((c) => byId.get(c.id) ?? c));
+				}).catch((err) => console.error("Error refreshing conversations:", err));
+				return;
+			}
 			setApiConversations([]);
 			setHasMore(false);
 			setTotalAvailable(null);
 			setLoading(true);
+			let loadedHasMore = false;
+			let loadFailed = false;
 			fetchAllConversations(selectedProjectId, exportAllLimit, (batch) => {
 				if (alive()) setApiConversations((prev) => [...prev, ...batch]);
 			}, (hasMore) => {
+				loadedHasMore = hasMore;
 				if (alive()) setHasMore(hasMore);
+			}, () => {
+				loadFailed = true;
+			}).then((items) => {
+				if (selectedProjectId === null && items.length > 0 && !loadFailed) listCache = {
+					limit: exportAllLimit,
+					items,
+					hasMore: loadedHasMore,
+					total: null
+				};
 			}).catch((err) => {
 				if (!alive()) return;
 				console.error("Error fetching conversations:", err);
@@ -20939,7 +21172,14 @@
 				const page = await fetchConversationsPage(selectedProjectId, apiConversations.length, 100);
 				setApiConversations((prev) => [...prev, ...page.items]);
 				if (page.total !== null) setTotalAvailable(page.total);
-				setHasMore(page.items.length >= 100 && (page.total === null || apiConversations.length + page.items.length < page.total));
+				const more = page.items.length >= 100 && (page.total === null || apiConversations.length + page.items.length < page.total);
+				setHasMore(more);
+				if (selectedProjectId === null && listCache) listCache = {
+					...listCache,
+					items: [...listCache.items, ...page.items],
+					hasMore: more,
+					total: page.total ?? listCache.total
+				};
 			} catch (err) {
 				console.error("loadMore error", err);
 			} finally {
@@ -22097,7 +22337,7 @@
 			})] })]
 		});
 	};
-	_css("span[data-time-format] {\n    display: none;\n}\n\nbody[data-time-format=\"12\"] span[data-time-format=\"12\"] {\n    display: inline;\n}\n\nbody[data-time-format=\"24\"] span[data-time-format=\"24\"] {\n    display: inline;\n}\n\n.Select {\n    padding: 0 2rem 0 0.5rem;\n    width: auto;\n    min-width: 7.5rem;\n    border-radius: 4px;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\n.dark .Select {\n    background-color: #2f2f2f;\n    color: #fff;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\nhtml {\n    --ce-text-primary: var(--text-primary, #0d0d0d);\n    --ce-menu-primary: #ffffff;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #ececec);\n    --ce-border-light: #0d0d0d26;\n}\n\n.dark {\n    --ce-text-primary: var(--text-primary, #ececec);\n    --ce-menu-primary: #2A2A2A;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #212121);\n    --ce-border-light: var(--border-default, rgba(255, 255, 255, .15));\n}\n\n/* Define our own background in both themes — this used to lean on\n   ChatGPT's bg-menu utility class, which no longer paints one */\n.bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n.dark .bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n.border-menu {\n    border-color: var(--ce-border-light);\n}\n\n.menu-item {\n    height: 46px;\n}\n\n.menu-item[disabled] {\n    filter: brightness(0.5);\n}\n\n.ce-nav-trigger {\n    min-width: 0;\n    border: 0;\n    color: var(--ce-text-primary);\n}\n\n.ce-nav-trigger .ce-menu-item-text {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.ce-nav-trigger-collapsed {\n    width: 32px;\n    height: 32px;\n    margin: 0 auto 0.5rem;\n    padding: 0;\n    justify-content: center;\n    gap: 0;\n    border-radius: 8px;\n    color: var(--text-secondary, var(--ce-text-primary));\n}\n\n.ce-nav-trigger-collapsed:hover {\n    background-color: var(--sidebar-surface-secondary, rgba(255, 255, 255, 0.1));\n}\n\n.ce-nav-trigger-collapsed .ce-menu-item-text {\n    display: none;\n}\n\n.ce-card {\n    border-radius: 1rem;\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);\n}\n\n/* ChatGPT's main column carries its own z-index, which beats the menu's\n   portalled Radix popper wrapper (position: fixed, z-index: auto). Raise\n   only OUR wrapper — :has keeps ChatGPT's own Radix poppers untouched —\n   and stay below the dialogs at 1000/1001. */\n[data-radix-popper-content-wrapper]:has(.ce-card) {\n    z-index: 999 !important;\n}\n\n.dark .ce-card {\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);\n}\n\n.inputFieldSet {\n    display: block;\n    border-width: 2px;\n    border-style: groove;\n}\n\n.inputFieldSet legend {\n    margin-left: 4px;\n}\n\n.inputFieldSet input {\n    background-color: transparent;\n    box-shadow: none!important;\n}\n\n.row-half {\n    grid-column: auto / span 1;\n}\n\n.row-full {\n    grid-column: auto / span 2;\n}\n\n.dropdown-backdrop {\n    display: block;\n    position: fixed;\n    top: 0;\n    bottom: 0;\n    left: 0;\n    right: 0;\n    background-color: rgba(0,0,0,.5);\n    animation-name: pointerFadeIn;\n    animation-duration: .3s;\n}\n\n@keyframes fadeIn {\n    from {\n        opacity: 0;\n    }\n    to {\n        opacity: 1;\n    }\n}\n\n@keyframes slideUp {\n    from {\n        transform: translateY(100%);\n    }\n    to {\n        transform: translateY(0);\n    }\n}\n\n@keyframes pointerFadeIn {\n    from {\n        opacity: 0;\n        pointer-events: none;\n    }\n    to {\n        opacity: 1;\n        pointer-events: auto;\n    }\n}\n\n@keyframes rotate {\n    from {\n        transform: rotate(0deg);\n    }\n    to {\n        transform: rotate(360deg);\n    }\n}\n\n@keyframes circularDash {\n    0% {\n        stroke-dasharray: 1px, 200px;\n        stroke-dashoffset: 0;\n    }\n    50% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -15px;\n    }\n    100% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -125px;\n    }\n}\n");
+	_css("span[data-time-format] {\n    display: none;\n}\n\nbody[data-time-format=\"12\"] span[data-time-format=\"12\"] {\n    display: inline;\n}\n\nbody[data-time-format=\"24\"] span[data-time-format=\"24\"] {\n    display: inline;\n}\n\n.Select {\n    padding: 0 2rem 0 0.5rem;\n    width: auto;\n    min-width: 7.5rem;\n    border-radius: 4px;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\n.dark .Select {\n    background-color: #2f2f2f;\n    color: #fff;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\nhtml {\n    --ce-text-primary: var(--text-primary, #0d0d0d);\n    --ce-menu-primary: #ffffff;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #ececec);\n    --ce-border-light: #0d0d0d26;\n}\n\n.dark {\n    --ce-text-primary: var(--text-primary, #ececec);\n    --ce-menu-primary: #2A2A2A;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #212121);\n    --ce-border-light: var(--border-default, rgba(255, 255, 255, .15));\n}\n\n/* Define our own background in both themes — this used to lean on\n   ChatGPT's bg-menu utility class, which no longer paints one */\n.bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n.dark .bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n.border-menu {\n    border-color: var(--ce-border-light);\n}\n\n.menu-item {\n    height: 46px;\n}\n\n.menu-item[disabled] {\n    filter: brightness(0.5);\n}\n\n.ce-nav-trigger {\n    min-width: 0;\n    border: 0;\n    color: var(--ce-text-primary);\n}\n\n.ce-nav-trigger .ce-menu-item-text {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.ce-nav-trigger-collapsed {\n    width: 32px;\n    height: 32px;\n    margin: 0 auto 0.5rem;\n    padding: 0;\n    justify-content: center;\n    gap: 0;\n    border-radius: 8px;\n    color: var(--text-secondary, var(--ce-text-primary));\n}\n\n.ce-nav-trigger-collapsed:hover {\n    background-color: var(--sidebar-surface-secondary, rgba(255, 255, 255, 0.1));\n}\n\n.ce-nav-trigger-collapsed .ce-menu-item-text {\n    display: none;\n}\n\n/* --- Mount-specific trigger styling -------------------------------------\n   The menu is placed by `utils/navMount.ts`, which tags its container with\n   `data-ce-mount`. Each surface needs different spacing, so the styling is\n   keyed off the mount instead of being baked into the component. */\n\n/* Expanded sidebar: the menu is the panel's last row. */\n[data-ce-mount=\"sidebar-panel\"] {\n    flex: 0 0 auto;\n    padding: 0.25rem 0.5rem 0.5rem;\n}\n\n/* Collapsed sidebar: match the icon rail's square buttons. */\n[data-ce-mount=\"nav-rail\"] {\n    display: flex;\n    justify-content: center;\n    width: 100%;\n    padding-bottom: 0.25rem;\n}\n\n/* Last-resort launcher: a small floating button that stays clear of\n   ChatGPT's own controls and below its dialogs. */\n#chatgpt-exporter-floating-root {\n    position: fixed;\n    left: 12px;\n    bottom: 12px;\n    z-index: 998;\n}\n\n#chatgpt-exporter-floating-root [data-ce-mount=\"floating\"] .ce-nav-trigger {\n    padding: 0.375rem 0.75rem;\n    border-radius: 9999px;\n    background-color: var(--ce-menu-secondary, rgba(0, 0, 0, 0.75));\n    color: var(--ce-text-primary, #fff);\n    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);\n}\n\n.ce-card {\n    border-radius: 1rem;\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);\n}\n\n/* ChatGPT's main column carries its own z-index, which beats the menu's\n   portalled Radix popper wrapper (position: fixed, z-index: auto). Raise\n   only OUR wrapper — :has keeps ChatGPT's own Radix poppers untouched —\n   and stay below the dialogs at 1000/1001. */\n[data-radix-popper-content-wrapper]:has(.ce-card) {\n    z-index: 999 !important;\n}\n\n.dark .ce-card {\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);\n}\n\n.inputFieldSet {\n    display: block;\n    border-width: 2px;\n    border-style: groove;\n}\n\n.inputFieldSet legend {\n    margin-left: 4px;\n}\n\n.inputFieldSet input {\n    background-color: transparent;\n    box-shadow: none!important;\n}\n\n.row-half {\n    grid-column: auto / span 1;\n}\n\n.row-full {\n    grid-column: auto / span 2;\n}\n\n.dropdown-backdrop {\n    display: block;\n    position: fixed;\n    top: 0;\n    bottom: 0;\n    left: 0;\n    right: 0;\n    background-color: rgba(0,0,0,.5);\n    animation-name: pointerFadeIn;\n    animation-duration: .3s;\n}\n\n@keyframes fadeIn {\n    from {\n        opacity: 0;\n    }\n    to {\n        opacity: 1;\n    }\n}\n\n@keyframes slideUp {\n    from {\n        transform: translateY(100%);\n    }\n    to {\n        transform: translateY(0);\n    }\n}\n\n@keyframes pointerFadeIn {\n    from {\n        opacity: 0;\n        pointer-events: none;\n    }\n    to {\n        opacity: 1;\n        pointer-events: auto;\n    }\n}\n\n@keyframes rotate {\n    from {\n        transform: rotate(0deg);\n    }\n    to {\n        transform: rotate(360deg);\n    }\n}\n\n@keyframes circularDash {\n    0% {\n        stroke-dasharray: 1px, 200px;\n        stroke-dashoffset: 0;\n    }\n    50% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -15px;\n    }\n    100% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -125px;\n    }\n}\n");
 	_css(".DialogOverlay {\n    background-color: rgba(0, 0, 0, 0.44);\n    position: fixed;\n    inset: 0;\n    z-index: 1000;\n    animation: fadeIn 150ms cubic-bezier(0.16, 1, 0.3, 1);\n}\n\n.DialogContent {\n    background-color: #f3f3f3;\n    border-radius: 6px;\n    box-shadow: hsl(206 22% 7% / 35%) 0px 10px 38px -10px, hsl(206 22% 7% / 20%) 0px 10px 20px -15px;\n    position: fixed;\n    top: 50%;\n    left: 50%;\n    transform: translate(-50%, -50%);\n    width: 90vw;\n    max-width: 560px;\n    max-height: 85vh;\n    overflow: hidden;\n    padding: 16px 24px;\n    z-index: 1001;\n    outline: none;\n    animation: contentShow 150ms cubic-bezier(0.16, 1, 0.3, 1);\n    display: flex;\n    flex-direction: column;\n}\n\n.dark .DialogContent {\n    background-color: #2a2a2a;\n    border-color: #40414f;\n    border-width: 1px;\n}\n\n.DialogContent._export {\n    background-color: #ffffff;\n}\n\n.dark .DialogContent._export {\n    background-color: #2a2a2a;\n}\n\n.DialogContent input[type=\"checkbox\"] {\n    border: none;\n    outline: none;\n    box-shadow: none;\n}\n\n.DialogTitle {\n    margin: 0 0 16px 0;\n    font-weight: 500;\n    color: #1a1523;\n    font-size: 20px;\n    flex-shrink: 0;\n}\n\n.DialogBody {\n    flex: 1;\n    min-height: 0;\n    overflow-y: auto;\n    overflow-x: hidden;\n}\n\n.dark .DialogTitle {\n    color: #fff;\n}\n\n.Button {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    border-radius: 4px;\n    padding: 0 15px;\n    font-size: 15px;\n    line-height: 1;\n    height: 35px;\n}\n.Button.green {\n    background-color: #ddf3e4;\n    color: #18794e;\n}\n.Button.red {\n    background-color: #f9d9d9;\n    color: #a71d2a;\n}\n.Button.neutral {\n    background-color: transparent;\n    color: #6f6e77;\n    border: 1px solid #6f6e77;\n    font-size: 13px;\n    height: 26px;\n    padding: 0 8px;\n}\n.Button.green:hover {\n    background-color: #ccebd7;\n}\n.Button.neutral:hover {\n    background-color: rgba(111, 110, 119, 0.1);\n}\n.dark .Button.neutral {\n    color: #a0a0a8;\n    border-color: #a0a0a8;\n}\n.dark .Button.neutral:hover {\n    background-color: rgba(160, 160, 168, 0.1);\n}\n.Button:disabled {\n    opacity: 0.5;\n    color: #6f6e77;\n    background-color: #e0e0e0;\n    cursor: not-allowed;\n}\n.Button:disabled:hover {\n    background-color: #e0e0e0;\n}\n\n.IconButton {\n    font-family: inherit;\n    border-radius: 100%;\n    height: 25px;\n    width: 25px;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    color: #6f6e77;\n}\n.IconButton:hover {\n    background-color: rgba(0, 0, 0, 0.06);\n}\n\n.CloseButton {\n    position: absolute;\n    top: 10px;\n    right: 10px;\n}\n\n.Fieldset {\n    display: flex;\n    gap: 20px;\n    align-items: center;\n    margin-bottom: 15px;\n}\n\n.Label {\n    font-size: 15px;\n    color: #1a1523;\n    min-width: 90px;\n    text-align: right;\n}\n\n.dark .Label {\n    color: #fff;\n}\n\n.Input {\n    width: 100%;\n    flex: 1;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    border-radius: 4px;\n    padding: 0 10px;\n    font-size: 15px;\n    line-height: 1;\n    color: #000;\n    background-color: #fafafa;\n    box-shadow: 0 0 0 1px #6f6e77;\n    height: 35px;\n    outline: none;\n}\n\n.dark .Input {\n    background-color: #2f2f2f;\n    color: #fff;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\n.Description {\n    font-size: 13px;\n    color: #5a5865;\n    text-align: right;\n    margin-bottom: 4px;\n}\n\n.dark .Description {\n    color: #bcbcbc;\n}\n\n.SelectSearch {\n    width: 100%;\n    padding: 8px 16px;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    border-radius: 4px 4px 0 0;\n    background-color: transparent;\n    color: inherit;\n    font-size: 14px;\n    outline: none;\n    flex-shrink: 0;\n}\n.SelectSearch::placeholder {\n    color: #9ca3af;\n}\n\n.SelectToolbar {\n    display: flex;\n    align-items: center;\n    /* Minimum breathing room between the select-all label and the right\n       group once the ml-auto margin collapses under pressure */\n    gap: 12px;\n    padding: 12px 16px;\n    border-radius: 0;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    flex-shrink: 0;\n}\n\n/* CJK labels wrap per-character when the row is squeezed — never shrink it */\n.SelectToolbar .CheckBoxLabel {\n    white-space: nowrap;\n    flex-shrink: 0;\n}\n\n.ProjectSelect .Select {\n    width: auto;\n}\n\n.SelectList {\n    position: relative;\n    width: 100%;\n    flex: 1;\n    min-height: 120px;\n    padding: 12px 16px;\n    overflow-x: hidden;\n    overflow-y: auto;\n    border: 1px solid #6f6e77;\n    border-radius: 0 0 4px 4px;\n    white-space: nowrap;\n}\n\n.SelectItem {\n    display: flex;\n    align-items: center;\n    gap: 6px;\n    overflow: hidden;\n}\n\n.SelectItem .CheckBoxLabel {\n    flex: 1;\n    min-width: 0;\n}\n\n.SelectItem .LabelText {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.SelectItem label, .SelectItem input {\n    cursor: pointer;\n}\n\n.SelectItem span {\n    vertical-align: middle;\n}\n\n.SelectItemMeta {\n    flex-shrink: 0;\n    font-size: 0.7rem;\n    color: #9ca3af;\n    white-space: nowrap;\n    font-variant-numeric: tabular-nums;\n    min-width: 6.5rem;\n    text-align: right;\n}\n.SelectItemMetaActive {\n    color: #6b7280;\n    font-weight: 600;\n}\n.dark {\n    .SelectItemMetaActive { color: #d1d5db; }\n}\n\n/* ── Sortable column header row ── */\n.SelectListHeader {\n    display: flex;\n    align-items: center;\n    padding: 0 16px;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    background: #f9fafb;\n    user-select: none;\n    flex-shrink: 0;\n}\n\n.dark {\n    .SelectListHeader { background: #1f2937; }\n}\n\n.SelectListHeaderCell {\n    flex-shrink: 0;\n    font-size: 0.68rem;\n    font-weight: 600;\n    color: #9ca3af;\n    letter-spacing: 0.03em;\n    text-transform: uppercase;\n    background: transparent;\n    border: none;\n    padding: 5px 4px;\n    cursor: pointer;\n    white-space: nowrap;\n    min-width: 6.5rem;\n    text-align: right;\n}\n.SelectListHeaderCell:hover { color: #374151; }\n.dark {\n    .SelectListHeaderCell:hover { color: #e5e7eb; }\n}\n.SelectListHeaderCellTitle {\n    flex: 1;\n    text-align: left;\n    padding-left: 28px; /* align with checkbox label */\n}\n.SelectListHeaderCellActive {\n    color: #2563eb;\n}\n.dark {\n    .SelectListHeaderCellActive { color: #60a5fa; }\n}\n\n\n@media (max-width: 480px) {\n    .DialogContent { max-height: 90vh; }\n    .SelectListHeaderCell:last-child { display: none; }\n    .SelectItemMeta:last-child { display: none; }\n    .ActionBar { justify-content: flex-end; }\n    .ActionBar > .Select { width: 100%; }\n    .ActionBar > .flex-grow { display: none; }\n}\n\n@keyframes contentShow {\n    from {\n        opacity: 0;\n        transform: translate(-50%, -48%) scale(0.96);\n    }\n    to {\n        opacity: 1;\n        transform: translate(-50%, -50%) scale(1);\n    }\n}\n");
 	function useCollapsedSidebar(container, isMobile) {
 		const [isCollapsed, setIsCollapsed] = h$4(false);
@@ -22316,10 +22556,177 @@
 	function Menu({ container }) {
 		return o$5(SettingProvider, { children: o$5(MenuInner, { container }) });
 	}
-	_css(".animate-fadeIn  {\n    animation: fadeIn .3s;\n}\n\n.animate-slideUp  {\n    animation: slideUp .3s;\n}\n\n.bg-blue-600 {\n    background-color: rgb(28 100 242);\n}\n\n.hover\\:bg-gray-500\\/10:hover {\n    background-color: hsla(0, 0%, 61%, .1)\n}\n\n.border-\\[\\#6f6e77\\] {\n    border-color: #6f6e77;\n}\n\n.cursor-help {\n    cursor: help;\n}\n\n.dark .dark\\:bg-white\\/5 {\n    background-color: rgb(255 255 255 / 5%);\n}\n\n.dark .dark\\:text-gray-200 {\n    color: rgb(229 231 235 / 1);\n}\n\n.dark .dark\\:text-gray-300 {\n    color: rgb(209 213 219 / 1);\n}\n\n.dark .dark\\:border-gray-\\[\\#86858d\\] {\n    border-color: #86858d;\n}\n\n.gap-x-1 {\n    column-gap: 0.25rem;\n}\n\n.h-2\\.5 {\n    height: 0.625rem;\n}\n\n.h-4 {\n    height: 1rem;\n}\n\n.inline-flex {\n    display: inline-flex;\n}\n\n.items-center {\n    align-items: center;\n}\n\n.ml-3 {\n    margin-left: 0.75rem;\n}\n\n.ml-4 {\n    margin-left: 1rem;\n}\n\n.mr-8 {\n    margin-right: 2rem;\n}\n\n.pb-0 {\n    padding-bottom: 0;\n}\n\n.pr-8 {\n    padding-right: 2rem;\n}\n\n.right-4 {\n    right: 1rem;\n}\n\n.rounded-full {\n    border-radius: 9999px;\n}\n\n.select-all {\n    user-select: all!important;\n}\n\n.shrink-0 {\n    flex-shrink: 0;\n}\n\n.min-w-0 {\n    min-width: 0;\n}\n\n.space-y-6>:not([hidden])~:not([hidden]) {\n    --tw-space-y-reverse: 0;\n    margin-top: calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));\n    margin-bottom: calc(1.5rem * var(--tw-space-y-reverse));\n}\n\n.truncate {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.whitespace-nowrap {\n    white-space: nowrap;\n}\n\n@media (min-width:768px) {\n    /* md */\n}\n\n@media (min-width:1024px) {\n    .lg\\:mt-0 {\n        margin-top: 0;\n    }\n\n    .lg\\:top-8 {\n        top: 2rem;\n    }\n}\n\n\n.toggle-switch {\n    position: relative;\n    outline: none;\n    background-color: rgb(229 231 235);\n    border: 1px solid rgb(107 114 128);\n    border-radius: 9999px;\n    cursor: pointer;\n    height: 20px;\n    width: 32px;\n}\n\n.dark .toggle-switch {\n    background-color: rgb(255 255 255 / 5%);\n    border-color: rgb(255 255 255 / 1);\n}\n\n.toggle-switch[data-state=\"checked\"] {\n    background-color: rgb(0 0 0);\n    border-color: rgb(0 0 0);\n}\n\n.dark .toggle-switch[data-state=\"checked\"] {\n    background-color: rgb(22 163 74);\n    border-color: rgb(22 163 74);\n}\n\n.toggle-switch-handle {\n    display: block;\n    background-color: rgb(255 255 255);\n    border-radius: 9999px;\n    height: 16px;\n    width: 16px;\n    transition: transform 0.1s;\n    will-change: transform;\n    transform: translateX(1px);\n}\n\n.toggle-switch-handle[data-state=\"checked\"] {\n    transform: translateX(14px);\n}\n\n.toggle-switch-handle:hover {\n    background-color: rgb(243 244 246);\n}\n\n.toggle-switch-label {\n    color: rgb(107 114 128);\n    margin-left: 0.75rem;\n    font-size: 0.875rem;\n    font-weight: 500;\n}\n\n.toggle-switch-label:hover {\n    color: rgb(71 85 105);\n}\n\n");
-	var PROFILE_BUTTON_SELECTOR = "[data-testid=\"accounts-profile-button\"]";
+	var MOUNT_ATTRIBUTE = "data-ce-mount";
+	var LEGACY_PROFILE_BUTTON_SELECTOR = "[data-testid=\"accounts-profile-button\"]";
 	var SIDEBAR_SCROLL_SELECTOR = "[data-app-action-sidebar-scroll]";
-	var AUTOMATIONS_SELECTOR = "[data-sidebar-destination=\"builtin:automations\"]";
+	var NAV_RAIL_SELECTOR = "[data-app-navigation-rail]";
+	var NAV_RAIL_FALLBACK_SELECTOR = "nav[aria-label], nav[role=\"navigation\"], aside nav";
+	var RAIL_MAX_WIDTH = 120;
+	var MENU_BUTTON_SELECTOR = "button[aria-haspopup=\"menu\"]";
+	function query(root, selector) {
+		try {
+			return Array.from(root.querySelectorAll(selector));
+		} catch {
+			return [];
+		}
+	}
+	function widthOf(element) {
+		const rect = typeof element.getBoundingClientRect === "function" ? element.getBoundingClientRect() : null;
+		if (!rect) return null;
+		return rect.width || null;
+	}
+	function preferRendered(elements) {
+		const rendered = elements.filter((element) => typeof element.getClientRects === "function" && element.getClientRects().length > 0);
+		return rendered.length > 0 ? rendered : elements;
+	}
+	function getNavMenuInsertionTarget(target) {
+		const wrapper = target.parentElement;
+		if (!wrapper || wrapper.children.length !== 1) return target;
+		return wrapper;
+	}
+	function tagMount(container, strategy) {
+		container.setAttribute(MOUNT_ATTRIBUTE, strategy);
+	}
+	function discoverLegacyProfileButton(root) {
+		return preferRendered(query(root, LEGACY_PROFILE_BUTTON_SELECTOR)).map((target) => ({
+			target,
+			strategy: "legacy-profile-button",
+			insert: (container) => {
+				tagMount(container, "legacy-profile-button");
+				getNavMenuInsertionTarget(target).before(container);
+			}
+		}));
+	}
+	function discoverLegacySidebarFooter(root) {
+		return query(root, SIDEBAR_SCROLL_SELECTOR).map((scrollRoot) => scrollRoot.nextElementSibling).filter((footer) => !!footer?.querySelector(MENU_BUTTON_SELECTOR)).map((target) => ({
+			target,
+			strategy: "legacy-sidebar-footer",
+			insert: (container) => {
+				tagMount(container, "legacy-sidebar-footer");
+				target.prepend(container);
+			}
+		}));
+	}
+	function discoverSidebarPanel(root) {
+		return preferRendered(query(root, SIDEBAR_SCROLL_SELECTOR)).map((scrollRoot) => {
+			const panel = scrollRoot.parentElement;
+			if (!panel) return null;
+			return {
+				target: scrollRoot,
+				strategy: "sidebar-panel",
+				insert: (container) => {
+					tagMount(container, "sidebar-panel");
+					panel.append(container);
+				}
+			};
+		}).filter((mount) => !!mount);
+	}
+	function discoverNavRail(root) {
+		const rails = query(root, NAV_RAIL_SELECTOR);
+		return preferRendered(rails.length > 0 ? rails : query(root, NAV_RAIL_FALLBACK_SELECTOR).filter((nav) => {
+			const width = widthOf(nav);
+			return width === null || width <= RAIL_MAX_WIDTH;
+		})).map((rail) => {
+			const clusters = Array.from(rail.children).filter((child) => !!child.querySelector(MENU_BUTTON_SELECTOR));
+			const host = clusters[clusters.length - 1] ?? rail;
+			return {
+				target: rail,
+				strategy: "nav-rail",
+				insert: (container) => {
+					tagMount(container, "nav-rail");
+					host.prepend(container);
+				}
+			};
+		});
+	}
+	var FLOATING_HOST_ID = "chatgpt-exporter-floating-root";
+	function discoverFloating(root) {
+		const doc = ownerDocument(root);
+		const body = doc?.body;
+		if (!body) return [];
+		return [{
+			target: body,
+			strategy: "floating",
+			insert: (container) => {
+				tagMount(container, "floating");
+				(doc.getElementById("chatgpt-exporter-floating-root") ?? (() => {
+					const element = doc.createElement("div");
+					element.id = "chatgpt-exporter-floating-root";
+					body.append(element);
+					return element;
+				})()).append(container);
+			}
+		}];
+	}
+	function ownerDocument(root) {
+		const candidate = root;
+		if (candidate.body && typeof candidate.createElement === "function") return candidate;
+		return candidate.ownerDocument ?? null;
+	}
+	var STRATEGIES = [
+		discoverLegacyProfileButton,
+		discoverLegacySidebarFooter,
+		discoverSidebarPanel,
+		discoverNavRail
+	];
+	function getNavMenuMounts(root = document, { allowFloating = true } = {}) {
+		for (const discover of STRATEGIES) {
+			const mounts = discover(root);
+			if (mounts.length > 0) return mounts;
+		}
+		return allowFloating ? discoverFloating(root) : [];
+	}
+	function cleanupFloatingHost(root = document) {
+		const host = ownerDocument(root)?.getElementById(FLOATING_HOST_ID);
+		if (host && host.children.length === 0) host.remove();
+	}
+	_css(".animate-fadeIn  {\n    animation: fadeIn .3s;\n}\n\n.animate-slideUp  {\n    animation: slideUp .3s;\n}\n\n.bg-blue-600 {\n    background-color: rgb(28 100 242);\n}\n\n.hover\\:bg-gray-500\\/10:hover {\n    background-color: hsla(0, 0%, 61%, .1)\n}\n\n.border-\\[\\#6f6e77\\] {\n    border-color: #6f6e77;\n}\n\n.cursor-help {\n    cursor: help;\n}\n\n.dark .dark\\:bg-white\\/5 {\n    background-color: rgb(255 255 255 / 5%);\n}\n\n.dark .dark\\:text-gray-200 {\n    color: rgb(229 231 235 / 1);\n}\n\n.dark .dark\\:text-gray-300 {\n    color: rgb(209 213 219 / 1);\n}\n\n.dark .dark\\:border-gray-\\[\\#86858d\\] {\n    border-color: #86858d;\n}\n\n.gap-x-1 {\n    column-gap: 0.25rem;\n}\n\n.h-2\\.5 {\n    height: 0.625rem;\n}\n\n.h-4 {\n    height: 1rem;\n}\n\n.inline-flex {\n    display: inline-flex;\n}\n\n.items-center {\n    align-items: center;\n}\n\n.ml-3 {\n    margin-left: 0.75rem;\n}\n\n.ml-4 {\n    margin-left: 1rem;\n}\n\n.mr-8 {\n    margin-right: 2rem;\n}\n\n.pb-0 {\n    padding-bottom: 0;\n}\n\n.pr-8 {\n    padding-right: 2rem;\n}\n\n.right-4 {\n    right: 1rem;\n}\n\n.rounded-full {\n    border-radius: 9999px;\n}\n\n.select-all {\n    user-select: all!important;\n}\n\n.shrink-0 {\n    flex-shrink: 0;\n}\n\n.min-w-0 {\n    min-width: 0;\n}\n\n.space-y-6>:not([hidden])~:not([hidden]) {\n    --tw-space-y-reverse: 0;\n    margin-top: calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));\n    margin-bottom: calc(1.5rem * var(--tw-space-y-reverse));\n}\n\n.truncate {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.whitespace-nowrap {\n    white-space: nowrap;\n}\n\n@media (min-width:768px) {\n    /* md */\n}\n\n@media (min-width:1024px) {\n    .lg\\:mt-0 {\n        margin-top: 0;\n    }\n\n    .lg\\:top-8 {\n        top: 2rem;\n    }\n}\n\n\n.toggle-switch {\n    position: relative;\n    outline: none;\n    background-color: rgb(229 231 235);\n    border: 1px solid rgb(107 114 128);\n    border-radius: 9999px;\n    cursor: pointer;\n    height: 20px;\n    width: 32px;\n}\n\n.dark .toggle-switch {\n    background-color: rgb(255 255 255 / 5%);\n    border-color: rgb(255 255 255 / 1);\n}\n\n.toggle-switch[data-state=\"checked\"] {\n    background-color: rgb(0 0 0);\n    border-color: rgb(0 0 0);\n}\n\n.dark .toggle-switch[data-state=\"checked\"] {\n    background-color: rgb(22 163 74);\n    border-color: rgb(22 163 74);\n}\n\n.toggle-switch-handle {\n    display: block;\n    background-color: rgb(255 255 255);\n    border-radius: 9999px;\n    height: 16px;\n    width: 16px;\n    transition: transform 0.1s;\n    will-change: transform;\n    transform: translateX(1px);\n}\n\n.toggle-switch-handle[data-state=\"checked\"] {\n    transform: translateX(14px);\n}\n\n.toggle-switch-handle:hover {\n    background-color: rgb(243 244 246);\n}\n\n.toggle-switch-label {\n    color: rgb(107 114 128);\n    margin-left: 0.75rem;\n    font-size: 0.875rem;\n    font-weight: 500;\n}\n\n.toggle-switch-label:hover {\n    color: rgb(71 85 105);\n}\n\n");
+	var SHELL_QUIET_MS = 400;
+	var SHELL_SETTLE_TIMEOUT_MS = 4e3;
+	function whenShellSettled(callback) {
+		const start = () => {
+			let quietTimer;
+			let capTimer;
+			let done = false;
+			const observer = new MutationObserver(() => {
+				clearTimeout(quietTimer);
+				quietTimer = setTimeout(finish, SHELL_QUIET_MS);
+			});
+			function finish() {
+				if (done) return;
+				done = true;
+				clearTimeout(quietTimer);
+				clearTimeout(capTimer);
+				observer.disconnect();
+				requestAnimationFrame(callback);
+			}
+			capTimer = setTimeout(finish, SHELL_SETTLE_TIMEOUT_MS);
+			quietTimer = setTimeout(finish, SHELL_QUIET_MS);
+			observer.observe(document.body, {
+				childList: true,
+				subtree: true
+			});
+		};
+		if (document.readyState === "complete") start();
+		else window.addEventListener("load", start, { once: true });
+	}
+	function createScheduler(run, minIntervalMs) {
+		let frame = 0;
+		let last = 0;
+		let timer;
+		return () => {
+			if (frame) return;
+			const wait = Math.max(0, minIntervalMs - (Date.now() - last));
+			clearTimeout(timer);
+			timer = setTimeout(() => {
+				frame = requestAnimationFrame(() => {
+					frame = 0;
+					last = Date.now();
+					run();
+				});
+			}, wait);
+		};
+	}
 	main();
 	function main() {
 		watchTemporaryChatId();
@@ -22329,15 +22736,17 @@
 			styleEl.id = "sentinel-css";
 			document.head.append(styleEl);
 			const injectionMap = new Map();
-			const injectNavMenu = ({ target, insert }) => {
+			let hydrated = false;
+			const injectNavMenu = ({ target, insert, strategy }) => {
 				if (injectionMap.has(target)) return;
-				console.log("[Exporter] Injecting nav", target);
+				console.log(`[Exporter] Injecting nav (${strategy})`, target);
 				const container = getMenuContainer();
 				injectionMap.set(target, container);
 				insert(container);
 			};
 			const syncNavMenu = () => {
-				const mounts = getNavMenuMounts();
+				if (!hydrated) return;
+				const mounts = getNavMenuMounts(document, { allowFloating: injectionMap.size > 0 || document.readyState === "complete" });
 				const activeTargets = new Set(mounts.map(({ target }) => target));
 				injectionMap.forEach((container, target) => {
 					if (!target.isConnected || !container.isConnected || !activeTargets.has(target)) {
@@ -22346,14 +22755,24 @@
 					}
 				});
 				mounts.forEach(injectNavMenu);
+				cleanupFloatingHost();
 			};
+			const scheduleSync = createScheduler(syncNavMenu, 150);
 			for (const selector of [
-				PROFILE_BUTTON_SELECTOR,
+				LEGACY_PROFILE_BUTTON_SELECTOR,
 				SIDEBAR_SCROLL_SELECTOR,
-				AUTOMATIONS_SELECTOR
-			]) import_sentinel_umd.default.on(selector, syncNavMenu);
-			syncNavMenu();
-			setInterval(syncNavMenu, 1e3);
+				NAV_RAIL_SELECTOR
+			]) import_sentinel_umd.default.on(selector, scheduleSync);
+			const observer = new MutationObserver(scheduleSync);
+			whenShellSettled(() => {
+				hydrated = true;
+				syncNavMenu();
+				observer.observe(document.body, {
+					childList: true,
+					subtree: true
+				});
+			});
+			setInterval(scheduleSync, 5e3);
 			if (isSharePage()) import_sentinel_umd.default.on(`div[role="presentation"] > .w-full > div >.flex.w-full`, (target) => {
 				target.prepend(getMenuContainer());
 			});
@@ -22363,8 +22782,8 @@
 				const currentChatId = getChatIdFromUrl();
 				if (!currentChatId || currentChatId === chatId) return;
 				chatId = currentChatId;
-				const { conversationNodes } = processConversation(await fetchConversation(chatId, false));
-				const threadContents = Array.from(document.querySelectorAll("main [data-testid^=\"conversation-turn-\"] [data-message-id]"));
+				const { conversationNodes } = processConversation(await fetchConversation(chatId));
+				const threadContents = getConversationTurns(document).filter((turn) => turn.closest("main")).flatMap((turn) => Array.from(turn.querySelectorAll(anyOf(MESSAGE_SELECTORS))));
 				if (threadContents.length === 0) return;
 				threadContents.forEach((thread, index) => {
 					const createTime = conversationNodes[index]?.message?.create_time;
@@ -22398,26 +22817,5 @@
 		container.style.zIndex = "99";
 		D$4(o$5(Menu, { container }), container);
 		return container;
-	}
-	function getNavMenuInsertionTarget(target) {
-		const wrapper = target.parentElement;
-		if (!wrapper || wrapper.children.length !== 1) return target;
-		return wrapper;
-	}
-	function getNavMenuMounts() {
-		const profileButtons = Array.from(document.querySelectorAll(PROFILE_BUTTON_SELECTOR));
-		if (profileButtons.length > 0) return profileButtons.map((target) => ({
-			target,
-			insert: (container) => getNavMenuInsertionTarget(target).before(container)
-		}));
-		const profileFooters = Array.from(document.querySelectorAll(SIDEBAR_SCROLL_SELECTOR)).map((scrollRoot) => scrollRoot.nextElementSibling).filter((footer) => !!footer?.querySelector("button[aria-haspopup=\"menu\"]"));
-		if (profileFooters.length > 0) return profileFooters.map((target) => ({
-			target,
-			insert: (container) => target.prepend(container)
-		}));
-		return Array.from(document.querySelectorAll(AUTOMATIONS_SELECTOR)).map((target) => ({
-			target,
-			insert: (container) => getNavMenuInsertionTarget(target).before(container)
-		}));
 	}
 })(JSZip, window);

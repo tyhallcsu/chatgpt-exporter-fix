@@ -4,10 +4,25 @@ import { checkIfConversationStarted, getChatIdFromUrl } from '../page'
 import { downloadFile, getFileNameWithFormat } from '../utils/download'
 import { Effect } from '../utils/effect'
 import { encodePng } from '../utils/png'
+import { TURN_SELECTORS, anyOf, findScrollRoot, findThreadContainer, getConversationTurns } from '../utils/threadDom'
 import { sleep } from '../utils/utils'
 
 const MAX_SCREENSHOT_DIMENSION = 16_000
 const MAX_TILE_PIXELS = 16_000_000
+
+/**
+ * Wrappers ChatGPT uses when it virtualizes long threads. The current shell
+ * renders each turn directly and keys it with `data-turn-key`; the retired
+ * shell wrapped turns in `[data-turn-id-container]` placeholders that only
+ * mounted their contents while intersecting the viewport. Both are handled so
+ * the capture loop below works on either.
+ */
+const VIRTUALIZED_TURN_SELECTOR = '[data-turn-id-container][data-is-intersecting], [data-turn-key]'
+
+/** The stable id of a turn wrapper under either shell. */
+function turnContainerId(element: HTMLElement): string | undefined {
+    return element.dataset.turnIdContainer ?? element.dataset.turnKey
+}
 
 function scrollElementWithinRoot(scrollRoot: HTMLElement, target: HTMLElement, block: 'start' | 'center') {
     const scrollRect = scrollRoot.getBoundingClientRect()
@@ -23,14 +38,6 @@ function scrollElementWithinRoot(scrollRoot: HTMLElement, target: HTMLElement, b
     scrollRoot.dispatchEvent(new Event('scroll', { bubbles: true }))
 }
 
-function findCommonAncestor(elements: HTMLElement[]) {
-    let ancestor = elements[0]?.parentElement
-    while (ancestor && !elements.every(element => ancestor!.contains(element))) {
-        ancestor = ancestor.parentElement
-    }
-    return ancestor
-}
-
 export async function exportToPng(fileNameFormat: string) {
     if (!checkIfConversationStarted()) {
         alert(i18n.t('Please start a conversation first'))
@@ -39,8 +46,8 @@ export async function exportToPng(fileNameFormat: string) {
 
     const effect = new Effect()
 
-    const conversationTurns = Array.from(document.querySelectorAll<HTMLElement>('#thread [data-testid^="conversation-turn-"]'))
-    const thread = findCommonAncestor(conversationTurns)
+    const conversationTurns = getConversationTurns(document).filter(turn => turn.closest('main'))
+    const thread = findThreadContainer(conversationTurns, document)
     if (!thread || thread.children.length === 0 || thread.scrollHeight < 50) {
         alert(i18n.t('Failed to export to PNG. Failed to find the element node.'))
         return false
@@ -48,10 +55,10 @@ export async function exportToPng(fileNameFormat: string) {
 
     const isDarkMode = document.documentElement.classList.contains('dark')
     const threadEl = thread as HTMLElement
-    const turnContainers = Array.from(threadEl.querySelectorAll<HTMLElement>('[data-turn-id-container][data-is-intersecting]'))
-        .filter(element => !!element.querySelector('[data-testid^="conversation-turn-"]') || element.offsetHeight > 0 || !!element.style.getPropertyValue('--last-known-height'))
+    const turnContainers = Array.from(threadEl.querySelectorAll<HTMLElement>(VIRTUALIZED_TURN_SELECTOR))
+        .filter(element => !!element.querySelector(anyOf(TURN_SELECTORS)) || element.offsetHeight > 0 || !!element.style.getPropertyValue('--last-known-height'))
     const turnContainerIds = turnContainers
-        .map(element => element.dataset.turnIdContainer)
+        .map(element => turnContainerId(element))
         .filter((id): id is string => !!id && id !== 'client-created-root')
 
     effect.add(() => {
@@ -60,6 +67,7 @@ export async function exportToPng(fileNameFormat: string) {
         const style = document.createElement('style')
         style.textContent = `
             [data-chatgpt-exporter-screenshot-root],
+            [data-chatgpt-exporter-screenshot-root] [data-turn-key],
             #thread [data-testid^="conversation-turn-"] {
                 color: ${isDarkMode ? '#ececec' : '#0d0d0d'};
                 background-color: ${isDarkMode ? '#212121' : '#fff'};
@@ -84,7 +92,7 @@ export async function exportToPng(fileNameFormat: string) {
             /* date separators such as "Yesterday 10:08 AM" */
             [data-chatgpt-exporter-screenshot-root] [role="separator"],
             /* any other elements that are not conversation turns */
-            [data-chatgpt-exporter-screenshot-root] > :not([data-turn-id-container]):not([data-testid^="conversation-turn-"]):not(:has([data-testid^="conversation-turn-"])),
+            [data-chatgpt-exporter-screenshot-root] > :not([data-turn-id-container]):not([data-turn-key]):not([data-testid^="conversation-turn-"]):not(:has([data-turn-key])):not(:has([data-testid^="conversation-turn-"])),
             /* hide back to top button */
             button.absolute,
             /* question button */
@@ -93,6 +101,7 @@ export async function exportToPng(fileNameFormat: string) {
             }
 
             /* Preserve the action row's spacing while hiding its toolbar. */
+            [data-turn-key] [role="group"]:has(button[aria-label]),
             [data-testid^="conversation-turn-"] [role="group"]:has([data-testid="copy-turn-action-button"]),
             /* code block buttons */
             #thread pre button {
@@ -100,6 +109,7 @@ export async function exportToPng(fileNameFormat: string) {
             }
 
             /* Later user turns currently have much larger top padding than the first one. */
+            [data-turn-key] > h4 + div,
             [data-testid^="conversation-turn-"][data-turn="user"] > h4 + div {
                 padding-top: 0 !important;
             }
@@ -111,7 +121,7 @@ export async function exportToPng(fileNameFormat: string) {
         }
     })
 
-    const scrollRoot = threadEl.closest<HTMLElement>('[data-scroll-root]')
+    const scrollRoot = findScrollRoot(threadEl)
     if (scrollRoot) {
         effect.add(() => {
             const scrollTop = scrollRoot.scrollTop
@@ -135,15 +145,15 @@ export async function exportToPng(fileNameFormat: string) {
     // capture source.
     const turnSnapshots = new Map<string, HTMLElement>()
     if (scrollRoot && turnContainerIds.length > 0) {
-        for (const turnContainerId of turnContainerIds) {
+        for (const turnContainerIdValue of turnContainerIds) {
             for (let pass = 0; pass < 10; pass++) {
-                const container = Array.from(threadEl.querySelectorAll<HTMLElement>('[data-turn-id-container][data-is-intersecting]'))
-                    .find(element => element.dataset.turnIdContainer === turnContainerId)
+                const container = Array.from(threadEl.querySelectorAll<HTMLElement>(VIRTUALIZED_TURN_SELECTOR))
+                    .find(element => turnContainerId(element) === turnContainerIdValue)
                 if (!container) break
 
-                const renderedTurn = container.querySelector<HTMLElement>('[data-testid^="conversation-turn-"]')
+                const renderedTurn = container.querySelector<HTMLElement>(anyOf(TURN_SELECTORS)) ?? container
                 if (renderedTurn) {
-                    turnSnapshots.set(turnContainerId, container.cloneNode(true) as HTMLElement)
+                    turnSnapshots.set(turnContainerIdValue, container.cloneNode(true) as HTMLElement)
                     break
                 }
 
@@ -151,10 +161,10 @@ export async function exportToPng(fileNameFormat: string) {
                 await sleep(250)
             }
 
-            if (!turnSnapshots.has(turnContainerId)) {
-                const placeholder = Array.from(threadEl.querySelectorAll<HTMLElement>('[data-turn-id-container][data-is-intersecting]'))
-                    .find(element => element.dataset.turnIdContainer === turnContainerId)
-                if (placeholder) turnSnapshots.set(turnContainerId, placeholder.cloneNode(true) as HTMLElement)
+            if (!turnSnapshots.has(turnContainerIdValue)) {
+                const placeholder = Array.from(threadEl.querySelectorAll<HTMLElement>(VIRTUALIZED_TURN_SELECTOR))
+                    .find(element => turnContainerId(element) === turnContainerIdValue)
+                if (placeholder) turnSnapshots.set(turnContainerIdValue, placeholder.cloneNode(true) as HTMLElement)
             }
         }
     }
@@ -178,8 +188,8 @@ export async function exportToPng(fileNameFormat: string) {
         staticThread.style.overflow = 'visible'
         staticThread.style.pointerEvents = 'none'
 
-        for (const turnContainerId of turnContainerIds) {
-            const snapshot = turnSnapshots.get(turnContainerId)
+        for (const turnContainerIdValue of turnContainerIds) {
+            const snapshot = turnSnapshots.get(turnContainerIdValue)
             if (snapshot) staticThread.appendChild(snapshot)
         }
 
