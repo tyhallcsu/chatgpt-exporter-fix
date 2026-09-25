@@ -4,6 +4,7 @@ import { checkIfConversationStarted, getChatIdFromUrl } from '../page'
 import { downloadFile, getFileNameWithFormat } from '../utils/download'
 import { Effect } from '../utils/effect'
 import { encodePng } from '../utils/png'
+import { detectColorScheme } from '../utils/theme'
 import { TURN_SELECTORS, anyOf, findScrollRoot, findThreadContainer, getConversationTurns } from '../utils/threadDom'
 import { sleep } from '../utils/utils'
 
@@ -53,7 +54,7 @@ export async function exportToPng(fileNameFormat: string) {
         return false
     }
 
-    const isDarkMode = document.documentElement.classList.contains('dark')
+    const isDarkMode = detectColorScheme() === 'dark'
     const threadEl = thread as HTMLElement
     const turnContainers = Array.from(threadEl.querySelectorAll<HTMLElement>(VIRTUALIZED_TURN_SELECTOR))
         .filter(element => !!element.querySelector(anyOf(TURN_SELECTORS)) || element.offsetHeight > 0 || !!element.style.getPropertyValue('--last-known-height'))

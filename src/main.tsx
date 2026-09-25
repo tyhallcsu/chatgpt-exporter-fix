@@ -12,6 +12,7 @@ import {
     getNavMenuMounts,
 } from './utils/navMount'
 import type { NavMenuMount } from './utils/navMount'
+import { watchColorScheme } from './utils/theme'
 import { MESSAGE_SELECTORS, anyOf, getConversationTurns } from './utils/threadDom'
 import { onloadSafe } from './utils/utils'
 
@@ -97,6 +98,10 @@ function main() {
     onloadSafe(() => {
         // eslint-disable-next-line no-console
         console.log('[Exporter] Loaded')
+
+        // Stamp the resolved colour scheme before anything renders, and keep
+        // it current as the user toggles appearance or their OS flips.
+        watchColorScheme()
 
         const styleEl = document.createElement('style')
         styleEl.id = 'sentinel-css'

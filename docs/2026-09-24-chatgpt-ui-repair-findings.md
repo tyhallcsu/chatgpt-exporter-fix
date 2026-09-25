@@ -247,22 +247,93 @@ immediately. Threads up to ~52,000 output pixels encode successfully.
 
 ---
 
+## 8b. Follow-up: dark mode (reported 2026-09-25)
+
+**Symptom:** with ChatGPT in dark mode the export menu rendered as a white
+card with near-invisible text — measured contrast **1.2:1**.
+
+**Cause:** the same redesign, one layer down. Every themed rule in the
+exporter hung off the `.dark` class ChatGPT used to put on `<html>`. Measured
+on the live site, in both schemes:
+
+| Signal | Light | Dark |
+|---|---|---|
+| `html.classList.contains('dark')` | `false` | **`false`** |
+| `html` class list | 23 hashed atomic names (`xsw4dja`, `x108lcm5`, …) | same |
+| inline `color-scheme` | `""` | `""` |
+| computed `color-scheme` | `light dark` | `light dark` |
+| `[data-theme]` count (logged out) | 0 | 0 |
+| painted `body` background | `rgb(252,252,252)` | `rgb(0,0,0)` |
+
+`.dark` is gone — ChatGPT ships hashed atomic CSS and drives its theme from
+`prefers-color-scheme`, adding an explicit `data-theme` only when the user
+overrides the system setting. With nothing matching `.dark`, the dark
+variable block never applied, so `--ce-menu-primary` stayed `#ffffff` while
+`--ce-text-primary` resolved through ChatGPT's own `--text-primary` to a
+*light* colour. White card, light text.
+
+This also silently broke two non-visual paths: `getColorScheme()` read an
+inline `color-scheme` that is now empty (so HTML exports carried the wrong
+theme), and the screenshot exporter picked its background from the same
+missing `.dark` class.
+
+**Fix — `src/utils/theme.ts`:** resolve the scheme from several signals,
+most direct first, and stamp the result as `data-ce-theme` on `<html>` for
+the stylesheets to key off:
+
+1. explicit `data-theme` / `data-color-scheme` / `data-mode` on `<html>` or
+   `<body>` (ignoring `system`/`auto`), or the retired `.dark` / `.light` class;
+2. an inline `color-scheme` naming exactly one scheme — `light dark` names
+   neither, so it correctly falls through;
+3. **the relative luminance of the background ChatGPT actually painted**,
+   walking past transparent surfaces. This is true by construction and needs
+   no knowledge of the attribute names;
+4. the OS preference, for a document with nothing painted yet.
+
+A `MutationObserver` limited to attribute changes on `<html>`/`<body>` plus a
+`matchMedia` listener keeps it current when the user toggles appearance or the
+OS flips at sunset — no subtree observation, so it costs nothing during
+streaming.
+
+All 27 `.dark` selectors across the four stylesheets now key off
+`[data-ce-theme="dark"]`. The variable block is additionally duplicated under
+`@media (prefers-color-scheme: dark)`, guarded by
+`html:not([data-ce-theme="light"])`, so dark users get dark colours even
+before the script runs — and an explicit light theme under a dark OS is not
+overridden.
+
+**Verified** with the built userscript against a fixture reproducing the
+current shell (black body, no `.dark` class anywhere):
+
+| | Light | Dark |
+|---|---|---|
+| `data-ce-theme` | `light` | `dark` |
+| menu card | `rgb(255,255,255)` | `rgb(42,42,42)` |
+| menu text | `rgb(13,13,13)` | `rgb(236,236,236)` |
+| contrast | ~19:1 | **12.1:1** (was 1.2:1) |
+| dialog bg / text | — | `rgb(42,42,42)` / `rgb(236,236,236)` |
+
+---
+
 ## 9. Files changed
 
 | File | Change |
 |---|---|
 | `src/utils/navMount.ts` | **New.** Layered mount discovery + floating fallback |
 | `src/utils/threadDom.ts` | **New.** Conversation DOM selectors with current/retired ordering |
+| `src/utils/theme.ts` | **New.** Colour-scheme resolution and the `data-ce-theme` stamp |
 | `src/main.tsx` | Hydration-safe gate, MutationObserver lifecycle, uses the new modules |
 | `src/page.ts` | `checkIfConversationStarted()` → `hasRenderedConversation()` |
 | `src/exporter/image.ts` | Screenshot uses the new turn/thread/scroll-root helpers |
-| `src/style.css` | Per-mount styling (`data-ce-mount`) + floating launcher |
+| `src/style.css`, `src/ui/Dialog.css`, `src/ui/CheckBox.css`, `src/styles/missing-tailwind.css` | Per-mount styling (`data-ce-mount`), floating launcher, and 27 `.dark` selectors rekeyed to `[data-ce-theme="dark"]` |
+| `src/utils/utils.ts` | `getColorScheme()` delegates to the detector |
 | `tests/nav-mount.test.ts` | **New.** 15 tests over 5 structural fixtures |
 | `tests/thread-dom.test.ts` | **New.** 9 tests incl. mixed-generation de-duplication |
+| `tests/theme.test.ts` | **New.** 14 tests over every detection signal |
 | `package.json`, `pnpm-lock.yaml` | `happy-dom` devDependency for DOM tests |
 | `dist/chatgpt.user.js` | Rebuilt (`dist/` is tracked upstream) |
 
-`pnpm test` 107 passed · `pnpm lint` clean · `pnpm build` OK.
+`pnpm test` 121 passed · `pnpm lint` clean · `pnpm build` OK.
 
 ---
 
@@ -280,7 +351,9 @@ Ranked by risk:
    fallback, then the floating launcher.
 4. **`[data-app-action-timeline-scroll]`** — screenshot scrolling; falls back
    to computing the nearest scrollable ancestor.
-5. **`/backend-api/conversation/<id>` response shape** — unchanged for years,
+5. **Theme signalling** — lowest risk of the set: detection ends at the
+   painted background, so a renamed attribute changes nothing.
+6. **`/backend-api/conversation/<id>` response shape** — unchanged for years,
    but all non-screenshot exports depend on it.
 
 The floating launcher means that even if items 1 and 3 both disappear, the
