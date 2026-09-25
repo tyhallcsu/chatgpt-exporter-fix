@@ -4,18 +4,87 @@ import { fetchConversation, processConversation } from './api'
 import { getChatIdFromUrl, isSharePage } from './page'
 import { watchTemporaryChatId } from './temporaryChat'
 import { Menu } from './ui/Menu'
+import {
+    LEGACY_PROFILE_BUTTON_SELECTOR,
+    NAV_RAIL_SELECTOR,
+    SIDEBAR_SCROLL_SELECTOR,
+    cleanupFloatingHost,
+    getNavMenuMounts,
+} from './utils/navMount'
+import type { NavMenuMount } from './utils/navMount'
+import { MESSAGE_SELECTORS, anyOf, getConversationTurns } from './utils/threadDom'
 import { onloadSafe } from './utils/utils'
 
 import './i18n'
 import './styles/missing-tailwind.css'
 
-const PROFILE_BUTTON_SELECTOR = '[data-testid="accounts-profile-button"]'
-const SIDEBAR_SCROLL_SELECTOR = '[data-app-action-sidebar-scroll]'
-const AUTOMATIONS_SELECTOR = '[data-sidebar-destination="builtin:automations"]'
+/** How long the shell must stop mutating before it counts as hydrated. */
+const SHELL_QUIET_MS = 400
+/** Upper bound on waiting, for pages that never fall completely quiet. */
+const SHELL_SETTLE_TIMEOUT_MS = 4000
 
-interface NavMenuMount {
-    target: Element
-    insert: (container: Element) => void
+/**
+ * ChatGPT server-renders its app shell and hydrates it after the document has
+ * loaded. Inserting a node into a container React is still hydrating makes
+ * React report a hydration mismatch (#418), throw the server markup away and
+ * re-render the shell — which both logs an error in the user's console and
+ * immediately destroys the menu we just mounted.
+ *
+ * `load` alone is not late enough: React Router continues hydrating route
+ * chunks after it. Waiting for the DOM itself to go quiet is, and it needs no
+ * knowledge of ChatGPT's internals.
+ */
+function whenShellSettled(callback: () => void) {
+    const start = () => {
+        let quietTimer: ReturnType<typeof setTimeout>
+        let capTimer: ReturnType<typeof setTimeout>
+        let done = false
+
+        const observer = new MutationObserver(() => {
+            clearTimeout(quietTimer)
+            quietTimer = setTimeout(finish, SHELL_QUIET_MS)
+        })
+
+        function finish() {
+            if (done) return
+            done = true
+            clearTimeout(quietTimer)
+            clearTimeout(capTimer)
+            observer.disconnect()
+            requestAnimationFrame(callback)
+        }
+
+        capTimer = setTimeout(finish, SHELL_SETTLE_TIMEOUT_MS)
+        quietTimer = setTimeout(finish, SHELL_QUIET_MS)
+        observer.observe(document.body, { childList: true, subtree: true })
+    }
+
+    if (document.readyState === 'complete') start()
+    else window.addEventListener('load', start, { once: true })
+}
+
+/**
+ * The navigation shell is re-rendered constantly (streaming replies, sidebar
+ * animations). Discovery is cheap but must not run per mutation, so it is
+ * coalesced into the next frame and rate limited.
+ */
+function createScheduler(run: () => void, minIntervalMs: number) {
+    let frame = 0
+    let last = 0
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    return () => {
+        if (frame) return
+        const wait = Math.max(0, minIntervalMs - (Date.now() - last))
+        clearTimeout(timer)
+        timer = setTimeout(() => {
+            frame = requestAnimationFrame(() => {
+                frame = 0
+                last = Date.now()
+                run()
+            })
+        }, wait)
+    }
 }
 
 main()
@@ -34,12 +103,13 @@ function main() {
         document.head.append(styleEl)
 
         const injectionMap = new Map<Element, Element>()
+        let hydrated = false
 
-        const injectNavMenu = ({ target, insert }: NavMenuMount) => {
+        const injectNavMenu = ({ target, insert, strategy }: NavMenuMount) => {
             if (injectionMap.has(target)) return
 
             // eslint-disable-next-line no-console
-            console.log('[Exporter] Injecting nav', target)
+            console.log(`[Exporter] Injecting nav (${strategy})`, target)
 
             const container = getMenuContainer()
             injectionMap.set(target, container)
@@ -47,7 +117,12 @@ function main() {
         }
 
         const syncNavMenu = () => {
-            const mounts = getNavMenuMounts()
+            if (!hydrated) return
+
+            // The floating launcher is a last resort. Suppressing it while the
+            // app shell is still rendering avoids a launcher that appears for
+            // a frame and is then replaced by the real sidebar mount.
+            const mounts = getNavMenuMounts(document, { allowFloating: injectionMap.size > 0 || document.readyState === 'complete' })
             const activeTargets = new Set(mounts.map(({ target }) => target))
             injectionMap.forEach((container, target) => {
                 if (!target.isConnected || !container.isConnected || !activeTargets.has(target)) {
@@ -57,15 +132,32 @@ function main() {
             })
 
             mounts.forEach(injectNavMenu)
+            cleanupFloatingHost()
         }
 
-        // Sentinel handles new sidebar nodes immediately. Polling remains as a
-        // fallback for UI variants that replace or remove injected siblings.
-        for (const selector of [PROFILE_BUTTON_SELECTOR, SIDEBAR_SCROLL_SELECTOR, AUTOMATIONS_SELECTOR]) {
-            sentinel.on(selector, syncNavMenu)
+        const scheduleSync = createScheduler(syncNavMenu, 150)
+
+        // Sentinel reacts the moment a known navigation anchor is rendered.
+        for (const selector of [LEGACY_PROFILE_BUTTON_SELECTOR, SIDEBAR_SCROLL_SELECTOR, NAV_RAIL_SELECTOR]) {
+            sentinel.on(selector, scheduleSync)
         }
-        syncNavMenu()
-        setInterval(syncNavMenu, 1000)
+
+        // Sentinel only fires for nodes matching those selectors. A mutation
+        // observer additionally catches the cases that remove or replace an
+        // already-injected menu — sidebar collapse, route changes and React
+        // re-rendering the shell around us.
+        const observer = new MutationObserver(scheduleSync)
+
+        whenShellSettled(() => {
+            hydrated = true
+            syncNavMenu()
+            observer.observe(document.body, { childList: true, subtree: true })
+        })
+
+        // Failsafe only. Event-driven remounting above is what keeps the menu
+        // present; this interval merely bounds how long a missed mutation can
+        // leave the menu absent.
+        setInterval(scheduleSync, 5000)
 
         // Support for share page
         if (isSharePage()) {
@@ -88,7 +180,8 @@ function main() {
             const rawConversation = await fetchConversation(chatId)
             const { conversationNodes } = processConversation(rawConversation)
 
-            const threadContents = Array.from(document.querySelectorAll('main [data-testid^="conversation-turn-"] [data-message-id]'))
+            const turns = getConversationTurns(document).filter(turn => turn.closest('main'))
+            const threadContents = turns.flatMap(turn => Array.from(turn.querySelectorAll(anyOf(MESSAGE_SELECTORS))))
             if (threadContents.length === 0) return
 
             threadContents.forEach((thread, index) => {
@@ -121,36 +214,4 @@ function getMenuContainer() {
     container.style.zIndex = '99'
     render(<Menu container={container} />, container)
     return container
-}
-
-function getNavMenuInsertionTarget(target: Element) {
-    const wrapper = target.parentElement
-    if (!wrapper || wrapper.children.length !== 1) return target
-
-    return wrapper
-}
-
-function getNavMenuMounts(): NavMenuMount[] {
-    const profileButtons = Array.from(document.querySelectorAll(PROFILE_BUTTON_SELECTOR))
-    if (profileButtons.length > 0) {
-        return profileButtons.map(target => ({
-            target,
-            insert: container => getNavMenuInsertionTarget(target).before(container),
-        }))
-    }
-
-    const profileFooters = Array.from(document.querySelectorAll(SIDEBAR_SCROLL_SELECTOR))
-        .map(scrollRoot => scrollRoot.nextElementSibling)
-        .filter((footer): footer is Element => !!footer?.querySelector('button[aria-haspopup="menu"]'))
-    if (profileFooters.length > 0) {
-        return profileFooters.map(target => ({
-            target,
-            insert: container => target.prepend(container),
-        }))
-    }
-
-    return Array.from(document.querySelectorAll(AUTOMATIONS_SELECTOR)).map(target => ({
-        target,
-        insert: container => getNavMenuInsertionTarget(target).before(container),
-    }))
 }

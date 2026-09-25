@@ -1,5 +1,6 @@
 import { unsafeWindow } from 'vite-plugin-monkey/dist/client'
 import { getBase64FromImg } from './utils/dom'
+import { hasRenderedConversation } from './utils/threadDom'
 
 declare global {
     interface Window {
@@ -88,5 +89,5 @@ export async function getUserAvatar(): Promise<string> {
 }
 
 export function checkIfConversationStarted() {
-    return !!document.querySelector('[data-testid^="conversation-turn-"]')
+    return hasRenderedConversation()
 }

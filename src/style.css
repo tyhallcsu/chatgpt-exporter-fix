@@ -91,6 +91,42 @@ html {
     display: none;
 }
 
+/* --- Mount-specific trigger styling -------------------------------------
+   The menu is placed by `utils/navMount.ts`, which tags its container with
+   `data-ce-mount`. Each surface needs different spacing, so the styling is
+   keyed off the mount instead of being baked into the component. */
+
+/* Expanded sidebar: the menu is the panel's last row. */
+[data-ce-mount="sidebar-panel"] {
+    flex: 0 0 auto;
+    padding: 0.25rem 0.5rem 0.5rem;
+}
+
+/* Collapsed sidebar: match the icon rail's square buttons. */
+[data-ce-mount="nav-rail"] {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    padding-bottom: 0.25rem;
+}
+
+/* Last-resort launcher: a small floating button that stays clear of
+   ChatGPT's own controls and below its dialogs. */
+#chatgpt-exporter-floating-root {
+    position: fixed;
+    left: 12px;
+    bottom: 12px;
+    z-index: 998;
+}
+
+#chatgpt-exporter-floating-root [data-ce-mount="floating"] .ce-nav-trigger {
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    background-color: var(--ce-menu-secondary, rgba(0, 0, 0, 0.75));
+    color: var(--ce-text-primary, #fff);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
 .ce-card {
     border-radius: 1rem;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
