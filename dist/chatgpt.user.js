@@ -22716,7 +22716,7 @@
 			})] })]
 		});
 	};
-	_css(".ce-timestamp {\n    color: var(--color-text-tertiary, var(--text-tertiary, #8f8f8f));\n}\n\nspan[data-time-format] {\n    display: none;\n}\n\nbody[data-time-format=\"12\"] span[data-time-format=\"12\"] {\n    display: inline;\n}\n\nbody[data-time-format=\"24\"] span[data-time-format=\"24\"] {\n    display: inline;\n}\n\n.Select {\n    padding: 0 2rem 0 0.5rem;\n    width: auto;\n    min-width: 7.5rem;\n    border-radius: 4px;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Select {\n    background-color: #2f2f2f;\n    color: #fff;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\nhtml {\n    --ce-text-primary: var(--color-text-primary, var(--text-primary, #0d0d0d));\n    --ce-menu-primary: #ffffff;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #ececec);\n    --ce-border-light: #0d0d0d26;\n    --ce-hover: var(--color-token-list-hover-background, rgba(0, 0, 0, .05));\n}\n\n:is(.dark, [data-theme=\"dark\"]) {\n    --ce-text-primary: var(--color-text-primary, var(--text-primary, #ececec));\n    --ce-menu-primary: #2A2A2A;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #212121);\n    --ce-border-light: var(--color-token-border-default, var(--border-default, rgba(255, 255, 255, .15)));\n    --ce-hover: var(--color-token-list-hover-background, rgba(255, 255, 255, .1));\n}\n\n/* Define our own background in both themes — this used to lean on\n   ChatGPT's bg-menu utility class, which no longer paints one */\n.bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n.border-menu {\n    border-color: var(--ce-border-light);\n}\n\n.menu-item {\n    height: 46px;\n}\n\n.menu-item[disabled] {\n    filter: brightness(0.5);\n}\n\n.ce-nav-trigger {\n    min-width: 0;\n    border: 0;\n    color: var(--ce-text-primary);\n}\n\n.ce-nav-trigger .ce-menu-item-text {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.ce-nav-trigger-collapsed {\n    width: 32px;\n    height: 32px;\n    margin: 0 auto 0.5rem;\n    padding: 0;\n    justify-content: center;\n    gap: 0;\n    border-radius: 8px;\n    color: var(--color-text-secondary, var(--text-secondary, var(--ce-text-primary)));\n}\n\n/* ChatGPT no longer ships the `hoverable` styles these items relied on. */\n.menu-item.hoverable:not([disabled]):hover,\n.ce-nav-trigger-collapsed:hover {\n    background-color: var(--ce-hover);\n}\n\n.ce-nav-trigger-collapsed .ce-menu-item-text {\n    display: none;\n}\n\n.ce-card {\n    color: var(--ce-text-primary);\n    border-radius: 1rem;\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);\n}\n\n.ce-card .menu-item {\n    column-gap: 8px;\n    padding-inline-start: 8px;\n}\n\n/* ChatGPT's main column carries its own z-index, which beats the menu's\n   portalled Radix popper wrapper (position: fixed, z-index: auto). Raise\n   only OUR wrapper — :has keeps ChatGPT's own Radix poppers untouched —\n   and stay below the dialogs at 1000/1001. */\n[data-radix-popper-content-wrapper]:has(.ce-card) {\n    z-index: 999 !important;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .ce-card {\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);\n}\n\n.inputFieldSet {\n    display: block;\n    border-width: 2px;\n    border-style: groove;\n}\n\n.inputFieldSet legend {\n    margin-left: 4px;\n}\n\n.inputFieldSet input {\n    background-color: transparent;\n    box-shadow: none!important;\n}\n\n.row-half {\n    grid-column: auto / span 1;\n}\n\n.row-full {\n    grid-column: auto / span 2;\n}\n\n.dropdown-backdrop {\n    display: block;\n    position: fixed;\n    top: 0;\n    bottom: 0;\n    left: 0;\n    right: 0;\n    background-color: rgba(0,0,0,.5);\n    animation-name: pointerFadeIn;\n    animation-duration: .3s;\n}\n\n@keyframes fadeIn {\n    from {\n        opacity: 0;\n    }\n    to {\n        opacity: 1;\n    }\n}\n\n@keyframes slideUp {\n    from {\n        transform: translateY(100%);\n    }\n    to {\n        transform: translateY(0);\n    }\n}\n\n@keyframes pointerFadeIn {\n    from {\n        opacity: 0;\n        pointer-events: none;\n    }\n    to {\n        opacity: 1;\n        pointer-events: auto;\n    }\n}\n\n@keyframes rotate {\n    from {\n        transform: rotate(0deg);\n    }\n    to {\n        transform: rotate(360deg);\n    }\n}\n\n@keyframes circularDash {\n    0% {\n        stroke-dasharray: 1px, 200px;\n        stroke-dashoffset: 0;\n    }\n    50% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -15px;\n    }\n    100% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -125px;\n    }\n}\n");
+	_css(".ce-timestamp {\n    color: var(--color-text-tertiary, var(--text-tertiary, #8f8f8f));\n}\n\nspan[data-time-format] {\n    display: none;\n}\n\nbody[data-time-format=\"12\"] span[data-time-format=\"12\"] {\n    display: inline;\n}\n\nbody[data-time-format=\"24\"] span[data-time-format=\"24\"] {\n    display: inline;\n}\n\n.Select {\n    padding: 0 2rem 0 0.5rem;\n    width: auto;\n    min-width: 7.5rem;\n    border-radius: 4px;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Select {\n    background-color: #2f2f2f;\n    color: #fff;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\nhtml {\n    --ce-text-primary: var(--color-text-primary, var(--text-primary, #0d0d0d));\n    --ce-menu-primary: #ffffff;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #ececec);\n    --ce-border-light: #0d0d0d26;\n    --ce-hover: var(--color-token-list-hover-background, rgba(0, 0, 0, .05));\n}\n\n:is(.dark, [data-theme=\"dark\"]) {\n    --ce-text-primary: var(--color-text-primary, var(--text-primary, #ececec));\n    --ce-menu-primary: #2A2A2A;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #212121);\n    --ce-border-light: var(--color-token-border-default, var(--border-default, rgba(255, 255, 255, .15)));\n    --ce-hover: var(--color-token-list-hover-background, rgba(255, 255, 255, .1));\n}\n\n/* Define our own background in both themes — this used to lean on\n   ChatGPT's bg-menu utility class, which no longer paints one */\n.bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n.border-menu {\n    border-color: var(--ce-border-light);\n}\n\n.menu-item {\n    height: 46px;\n}\n\n.menu-item[disabled] {\n    filter: brightness(0.5);\n}\n\n.ce-nav-trigger {\n    min-width: 0;\n    border: 0;\n    color: var(--ce-text-primary);\n}\n\n.ce-nav-trigger .ce-menu-item-text {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.ce-nav-trigger-collapsed {\n    width: 32px;\n    height: 32px;\n    margin: 0 auto 0.5rem;\n    padding: 0;\n    justify-content: center;\n    gap: 0;\n    border-radius: 8px;\n    color: var(--color-text-secondary, var(--text-secondary, var(--ce-text-primary)));\n}\n\n/* ChatGPT no longer ships the `hoverable` styles these items relied on. */\n.menu-item.hoverable:not([disabled]):hover,\n.ce-nav-trigger-collapsed:hover {\n    background-color: var(--ce-hover);\n}\n\n.ce-nav-trigger-collapsed .ce-menu-item-text {\n    display: none;\n}\n\n/* --- Mount-specific trigger styling --------------------------------------\n   `data-ce-mount` records which strategy placed the menu (see main.tsx). */\n\n/* Expanded sidebar: the menu becomes the panel's last row. */\n[data-ce-mount=\"sidebar-panel\"] {\n    flex: 0 0 auto;\n    padding: 0.25rem 0.5rem 0.5rem;\n}\n\n/* Last-resort launcher, used only when no navigation anchor is rendered.\n   Stays clear of ChatGPT's own controls and below its dialogs. */\n#chatgpt-exporter-floating-root {\n    position: fixed;\n    left: 12px;\n    bottom: 12px;\n    z-index: 998;\n}\n\n#chatgpt-exporter-floating-root [data-ce-mount=\"floating\"] .ce-nav-trigger {\n    padding: 0.375rem 0.75rem;\n    border-radius: 9999px;\n    background-color: var(--ce-menu-secondary);\n    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);\n}\n\n.ce-card {\n    color: var(--ce-text-primary);\n    border-radius: 1rem;\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);\n}\n\n.ce-card .menu-item {\n    column-gap: 8px;\n    padding-inline-start: 8px;\n}\n\n/* ChatGPT's main column carries its own z-index, which beats the menu's\n   portalled Radix popper wrapper (position: fixed, z-index: auto). Raise\n   only OUR wrapper — :has keeps ChatGPT's own Radix poppers untouched —\n   and stay below the dialogs at 1000/1001. */\n[data-radix-popper-content-wrapper]:has(.ce-card) {\n    z-index: 999 !important;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .ce-card {\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);\n}\n\n.inputFieldSet {\n    display: block;\n    border-width: 2px;\n    border-style: groove;\n}\n\n.inputFieldSet legend {\n    margin-left: 4px;\n}\n\n.inputFieldSet input {\n    background-color: transparent;\n    box-shadow: none!important;\n}\n\n.row-half {\n    grid-column: auto / span 1;\n}\n\n.row-full {\n    grid-column: auto / span 2;\n}\n\n.dropdown-backdrop {\n    display: block;\n    position: fixed;\n    top: 0;\n    bottom: 0;\n    left: 0;\n    right: 0;\n    background-color: rgba(0,0,0,.5);\n    animation-name: pointerFadeIn;\n    animation-duration: .3s;\n}\n\n@keyframes fadeIn {\n    from {\n        opacity: 0;\n    }\n    to {\n        opacity: 1;\n    }\n}\n\n@keyframes slideUp {\n    from {\n        transform: translateY(100%);\n    }\n    to {\n        transform: translateY(0);\n    }\n}\n\n@keyframes pointerFadeIn {\n    from {\n        opacity: 0;\n        pointer-events: none;\n    }\n    to {\n        opacity: 1;\n        pointer-events: auto;\n    }\n}\n\n@keyframes rotate {\n    from {\n        transform: rotate(0deg);\n    }\n    to {\n        transform: rotate(360deg);\n    }\n}\n\n@keyframes circularDash {\n    0% {\n        stroke-dasharray: 1px, 200px;\n        stroke-dashoffset: 0;\n    }\n    50% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -15px;\n    }\n    100% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -125px;\n    }\n}\n");
 	_css(".DialogOverlay {\n    background-color: rgba(0, 0, 0, 0.44);\n    position: fixed;\n    inset: 0;\n    z-index: 1000;\n    animation: fadeIn 150ms cubic-bezier(0.16, 1, 0.3, 1);\n}\n\n.DialogContent {\n    color: var(--ce-text-primary);\n    background-color: #f3f3f3;\n    border-radius: 6px;\n    box-shadow: hsl(206 22% 7% / 35%) 0px 10px 38px -10px, hsl(206 22% 7% / 20%) 0px 10px 20px -15px;\n    position: fixed;\n    top: 50%;\n    left: 50%;\n    transform: translate(-50%, -50%);\n    width: 90vw;\n    max-width: 560px;\n    max-height: 85vh;\n    overflow: hidden;\n    padding: 16px 24px;\n    z-index: 1001;\n    outline: none;\n    animation: contentShow 150ms cubic-bezier(0.16, 1, 0.3, 1);\n    display: flex;\n    flex-direction: column;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .DialogContent {\n    background-color: #2a2a2a;\n    border-color: #40414f;\n    border-width: 1px;\n}\n\n.DialogContent._export {\n    background-color: #ffffff;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .DialogContent._export {\n    background-color: #2a2a2a;\n}\n\n.DialogContent input[type=\"checkbox\"] {\n    border: none;\n    outline: none;\n    box-shadow: none;\n}\n\n.DialogTitle {\n    margin: 0 0 16px 0;\n    font-weight: 500;\n    color: #1a1523;\n    font-size: 20px;\n    flex-shrink: 0;\n}\n\n.DialogBody {\n    flex: 1;\n    min-height: 0;\n    overflow-y: auto;\n    overflow-x: hidden;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .DialogTitle {\n    color: #fff;\n}\n\n.Button {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    border-radius: 4px;\n    padding: 0 15px;\n    font-size: 15px;\n    line-height: 1;\n    height: 35px;\n}\n.Button.green {\n    background-color: #ddf3e4;\n    color: #18794e;\n}\n.Button.red {\n    background-color: #f9d9d9;\n    color: #a71d2a;\n}\n.Button.neutral {\n    background-color: transparent;\n    color: #6f6e77;\n    border: 1px solid #6f6e77;\n    font-size: 13px;\n    height: 26px;\n    padding: 0 8px;\n}\n.Button.green:hover {\n    background-color: #ccebd7;\n}\n.Button.neutral:hover {\n    background-color: rgba(111, 110, 119, 0.1);\n}\n:is(.dark, [data-theme=\"dark\"]) .Button.neutral {\n    color: #a0a0a8;\n    border-color: #a0a0a8;\n}\n:is(.dark, [data-theme=\"dark\"]) .Button.neutral:hover {\n    background-color: rgba(160, 160, 168, 0.1);\n}\n.Button:disabled {\n    opacity: 0.5;\n    color: #6f6e77;\n    background-color: #e0e0e0;\n    cursor: not-allowed;\n}\n.Button:disabled:hover {\n    background-color: #e0e0e0;\n}\n\n.IconButton {\n    font-family: inherit;\n    border-radius: 100%;\n    height: 25px;\n    width: 25px;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    color: #6f6e77;\n}\n.IconButton:hover {\n    background-color: rgba(0, 0, 0, 0.06);\n}\n\n.CloseButton {\n    position: absolute;\n    top: 10px;\n    right: 10px;\n}\n\n.Fieldset {\n    display: flex;\n    gap: 20px;\n    align-items: center;\n    margin-bottom: 15px;\n}\n\n.Label {\n    font-size: 15px;\n    color: #1a1523;\n    min-width: 90px;\n    text-align: right;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Label {\n    color: #fff;\n}\n\n.Input {\n    width: 100%;\n    flex: 1;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    border-radius: 4px;\n    padding: 0 10px;\n    font-size: 15px;\n    line-height: 1;\n    color: #000;\n    background-color: #fafafa;\n    box-shadow: 0 0 0 1px #6f6e77;\n    height: 35px;\n    outline: none;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Input {\n    background-color: #2f2f2f;\n    color: #fff;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\n.Description {\n    font-size: 13px;\n    color: #5a5865;\n    text-align: right;\n    margin-bottom: 4px;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Description {\n    color: #bcbcbc;\n}\n\n.SelectSearch {\n    width: 100%;\n    padding: 8px 16px;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    border-radius: 4px 4px 0 0;\n    background-color: transparent;\n    color: inherit;\n    font-size: 14px;\n    outline: none;\n    flex-shrink: 0;\n}\n.SelectSearch::placeholder {\n    color: #9ca3af;\n}\n\n.SelectToolbar {\n    display: flex;\n    align-items: center;\n    /* Minimum breathing room between the select-all label and the right\n       group once the ml-auto margin collapses under pressure */\n    gap: 12px;\n    padding: 12px 16px;\n    border-radius: 0;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    flex-shrink: 0;\n}\n\n/* CJK labels wrap per-character when the row is squeezed — never shrink it */\n.SelectToolbar .CheckBoxLabel {\n    white-space: nowrap;\n    flex-shrink: 0;\n}\n\n.ProjectSelect .Select {\n    width: auto;\n}\n\n.SelectList {\n    position: relative;\n    width: 100%;\n    flex: 1;\n    min-height: 120px;\n    padding: 12px 16px;\n    overflow-x: hidden;\n    overflow-y: auto;\n    border: 1px solid #6f6e77;\n    border-radius: 0 0 4px 4px;\n    white-space: nowrap;\n}\n\n.SelectItem {\n    display: flex;\n    align-items: center;\n    gap: 6px;\n    overflow: hidden;\n}\n\n.SelectItem .CheckBoxLabel {\n    flex: 1;\n    min-width: 0;\n}\n\n.SelectItem .LabelText {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.SelectItem label, .SelectItem input {\n    cursor: pointer;\n}\n\n.SelectItem span {\n    vertical-align: middle;\n}\n\n.SelectItemMeta {\n    flex-shrink: 0;\n    font-size: 0.7rem;\n    color: #9ca3af;\n    white-space: nowrap;\n    font-variant-numeric: tabular-nums;\n    min-width: 6.5rem;\n    text-align: right;\n}\n.SelectItemMetaActive {\n    color: #6b7280;\n    font-weight: 600;\n}\n:is(.dark, [data-theme=\"dark\"]) {\n    .SelectItemMetaActive { color: #d1d5db; }\n}\n\n/* ── Sortable column header row ── */\n.SelectListHeader {\n    display: flex;\n    align-items: center;\n    padding: 0 16px;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    background: #f9fafb;\n    user-select: none;\n    flex-shrink: 0;\n}\n\n:is(.dark, [data-theme=\"dark\"]) {\n    .SelectListHeader { background: #1f2937; }\n}\n\n.SelectListHeaderCell {\n    flex-shrink: 0;\n    font-size: 0.68rem;\n    font-weight: 600;\n    color: #9ca3af;\n    letter-spacing: 0.03em;\n    text-transform: uppercase;\n    background: transparent;\n    border: none;\n    padding: 5px 4px;\n    cursor: pointer;\n    white-space: nowrap;\n    min-width: 6.5rem;\n    text-align: right;\n}\n.SelectListHeaderCell:hover { color: #374151; }\n:is(.dark, [data-theme=\"dark\"]) {\n    .SelectListHeaderCell:hover { color: #e5e7eb; }\n}\n.SelectListHeaderCellTitle {\n    flex: 1;\n    text-align: left;\n    padding-left: 28px; /* align with checkbox label */\n}\n.SelectListHeaderCellActive {\n    color: #2563eb;\n}\n:is(.dark, [data-theme=\"dark\"]) {\n    .SelectListHeaderCellActive { color: #60a5fa; }\n}\n\n\n@media (max-width: 480px) {\n    .DialogContent { max-height: 90vh; }\n    .SelectListHeaderCell:last-child { display: none; }\n    .SelectItemMeta:last-child { display: none; }\n    .ActionBar { justify-content: flex-end; }\n    .ActionBar > .Select { width: 100%; }\n    .ActionBar > .flex-grow { display: none; }\n}\n\n@keyframes contentShow {\n    from {\n        opacity: 0;\n        transform: translate(-50%, -48%) scale(0.96);\n    }\n    to {\n        opacity: 1;\n        transform: translate(-50%, -50%) scale(1);\n    }\n}\n");
 	function useCollapsedSidebar(container, isMobile) {
 		const [isCollapsed, setIsCollapsed] = h$4(false);
@@ -22935,12 +22935,111 @@
 	function Menu({ container }) {
 		return o$5(SettingProvider, { children: o$5(MenuInner, { container }) });
 	}
-	_css(".animate-fadeIn  {\n    animation: fadeIn .3s;\n}\n\n.animate-slideUp  {\n    animation: slideUp .3s;\n}\n\n.bg-blue-600 {\n    background-color: rgb(28 100 242);\n}\n\n.hover\\:bg-gray-500\\/10:hover {\n    background-color: hsla(0, 0%, 61%, .1)\n}\n\n.border-\\[\\#6f6e77\\] {\n    border-color: #6f6e77;\n}\n\n.cursor-help {\n    cursor: help;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .dark\\:bg-white\\/5 {\n    background-color: rgb(255 255 255 / 5%);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .dark\\:text-gray-200 {\n    color: rgb(229 231 235 / 1);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .dark\\:text-gray-300 {\n    color: rgb(209 213 219 / 1);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .dark\\:border-gray-\\[\\#86858d\\] {\n    border-color: #86858d;\n}\n\n.gap-x-1 {\n    column-gap: 0.25rem;\n}\n\n.h-2\\.5 {\n    height: 0.625rem;\n}\n\n.h-4 {\n    height: 1rem;\n}\n\n.inline-flex {\n    display: inline-flex;\n}\n\n.items-center {\n    align-items: center;\n}\n\n.ml-3 {\n    margin-left: 0.75rem;\n}\n\n.ml-4 {\n    margin-left: 1rem;\n}\n\n.mr-8 {\n    margin-right: 2rem;\n}\n\n.pb-0 {\n    padding-bottom: 0;\n}\n\n.pr-8 {\n    padding-right: 2rem;\n}\n\n.right-4 {\n    right: 1rem;\n}\n\n.rounded-full {\n    border-radius: 9999px;\n}\n\n.select-all {\n    user-select: all!important;\n}\n\n.shrink-0 {\n    flex-shrink: 0;\n}\n\n.min-w-0 {\n    min-width: 0;\n}\n\n.space-y-6>:not([hidden])~:not([hidden]) {\n    --tw-space-y-reverse: 0;\n    margin-top: calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));\n    margin-bottom: calc(1.5rem * var(--tw-space-y-reverse));\n}\n\n.truncate {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.whitespace-nowrap {\n    white-space: nowrap;\n}\n\n@media (min-width:768px) {\n    /* md */\n}\n\n@media (min-width:1024px) {\n    .lg\\:mt-0 {\n        margin-top: 0;\n    }\n\n    .lg\\:top-8 {\n        top: 2rem;\n    }\n}\n\n\n.toggle-switch {\n    position: relative;\n    outline: none;\n    background-color: rgb(229 231 235);\n    border: 1px solid rgb(107 114 128);\n    border-radius: 9999px;\n    cursor: pointer;\n    height: 20px;\n    width: 32px;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .toggle-switch {\n    background-color: rgb(255 255 255 / 5%);\n    border-color: rgb(255 255 255 / 1);\n}\n\n.toggle-switch[data-state=\"checked\"] {\n    background-color: rgb(0 0 0);\n    border-color: rgb(0 0 0);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .toggle-switch[data-state=\"checked\"] {\n    background-color: rgb(22 163 74);\n    border-color: rgb(22 163 74);\n}\n\n.toggle-switch-handle {\n    display: block;\n    background-color: rgb(255 255 255);\n    border-radius: 9999px;\n    height: 16px;\n    width: 16px;\n    transition: transform 0.1s;\n    will-change: transform;\n    transform: translateX(1px);\n}\n\n.toggle-switch-handle[data-state=\"checked\"] {\n    transform: translateX(14px);\n}\n\n.toggle-switch-handle:hover {\n    background-color: rgb(243 244 246);\n}\n\n.toggle-switch-label {\n    color: rgb(107 114 128);\n    margin-left: 0.75rem;\n    font-size: 0.875rem;\n    font-weight: 500;\n}\n\n.toggle-switch-label:hover {\n    color: rgb(71 85 105);\n}\n");
 	var PROFILE_BUTTON_SELECTOR = "[data-testid=\"accounts-profile-button\"]";
 	var SIDEBAR_SCROLL_SELECTOR = "[data-app-action-sidebar-scroll]";
 	var AUTOMATIONS_SELECTOR = "[data-sidebar-destination=\"builtin:automations\"]";
-	var MESSAGE_UNIT_SELECTOR = "[data-chatgpt-conversation-selection-target] [data-chatgpt-search-message-ids]";
 	var RAIL_MENU_BUTTON_SELECTOR = "[data-app-navigation-rail] button[aria-haspopup=\"menu\"]";
+	var FLOATING_HOST_ID = "chatgpt-exporter-floating-root";
+	var MOUNT_ATTRIBUTE = "data-ce-mount";
+	function preferRendered(elements) {
+		const rendered = elements.filter((element) => typeof element.getClientRects === "function" && element.getClientRects().length > 0);
+		return rendered.length > 0 ? rendered : elements;
+	}
+	function getNavMenuInsertionTarget(target) {
+		const wrapper = target.parentElement;
+		if (!wrapper || wrapper.children.length !== 1) return target;
+		return wrapper;
+	}
+	function getNavMenuMounts() {
+		const profileButtons = preferRendered(Array.from(document.querySelectorAll(PROFILE_BUTTON_SELECTOR)));
+		if (profileButtons.length > 0) return profileButtons.map((target) => ({
+			target,
+			insert: (container) => {
+				container.setAttribute(MOUNT_ATTRIBUTE, "legacy-profile-button");
+				getNavMenuInsertionTarget(target).before(container);
+			}
+		}));
+		const scrollRoots = preferRendered(Array.from(document.querySelectorAll(SIDEBAR_SCROLL_SELECTOR)));
+		const profileFooters = scrollRoots.map((scrollRoot) => scrollRoot.nextElementSibling).filter((footer) => !!footer?.querySelector("button[aria-haspopup=\"menu\"]"));
+		if (profileFooters.length > 0) return profileFooters.map((target) => ({
+			target,
+			insert: (container) => {
+				container.setAttribute(MOUNT_ATTRIBUTE, "legacy-sidebar-footer");
+				target.prepend(container);
+			}
+		}));
+		const panels = scrollRoots.filter((scrollRoot) => !!scrollRoot.parentElement);
+		if (panels.length > 0) return panels.map((scrollRoot) => ({
+			target: scrollRoot,
+			insert: (container) => {
+				container.setAttribute(MOUNT_ATTRIBUTE, "sidebar-panel");
+				scrollRoot.parentElement.append(container);
+			}
+		}));
+		const railMenuButtons = preferRendered(Array.from(document.querySelectorAll(RAIL_MENU_BUTTON_SELECTOR)));
+		if (railMenuButtons.length > 0) {
+			const railMenuButton = railMenuButtons[0];
+			return [{
+				target: railMenuButton,
+				insert: (container) => {
+					container.setAttribute(MOUNT_ATTRIBUTE, "nav-rail");
+					getNavMenuInsertionTarget(railMenuButton).before(container);
+				}
+			}];
+		}
+		const automations = preferRendered(Array.from(document.querySelectorAll(AUTOMATIONS_SELECTOR)));
+		if (automations.length > 0) return automations.map((target) => ({
+			target,
+			insert: (container) => {
+				container.setAttribute(MOUNT_ATTRIBUTE, "automations");
+				getNavMenuInsertionTarget(target).before(container);
+			}
+		}));
+		if (!document.body) return [];
+		return [{
+			target: document.body,
+			insert: (container) => {
+				container.setAttribute(MOUNT_ATTRIBUTE, "floating");
+				(document.getElementById("chatgpt-exporter-floating-root") ?? (() => {
+					const element = document.createElement("div");
+					element.id = "chatgpt-exporter-floating-root";
+					document.body.append(element);
+					return element;
+				})()).append(container);
+			}
+		}];
+	}
+	_css(".animate-fadeIn  {\n    animation: fadeIn .3s;\n}\n\n.animate-slideUp  {\n    animation: slideUp .3s;\n}\n\n.bg-blue-600 {\n    background-color: rgb(28 100 242);\n}\n\n.hover\\:bg-gray-500\\/10:hover {\n    background-color: hsla(0, 0%, 61%, .1)\n}\n\n.border-\\[\\#6f6e77\\] {\n    border-color: #6f6e77;\n}\n\n.cursor-help {\n    cursor: help;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .dark\\:bg-white\\/5 {\n    background-color: rgb(255 255 255 / 5%);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .dark\\:text-gray-200 {\n    color: rgb(229 231 235 / 1);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .dark\\:text-gray-300 {\n    color: rgb(209 213 219 / 1);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .dark\\:border-gray-\\[\\#86858d\\] {\n    border-color: #86858d;\n}\n\n.gap-x-1 {\n    column-gap: 0.25rem;\n}\n\n.h-2\\.5 {\n    height: 0.625rem;\n}\n\n.h-4 {\n    height: 1rem;\n}\n\n.inline-flex {\n    display: inline-flex;\n}\n\n.items-center {\n    align-items: center;\n}\n\n.ml-3 {\n    margin-left: 0.75rem;\n}\n\n.ml-4 {\n    margin-left: 1rem;\n}\n\n.mr-8 {\n    margin-right: 2rem;\n}\n\n.pb-0 {\n    padding-bottom: 0;\n}\n\n.pr-8 {\n    padding-right: 2rem;\n}\n\n.right-4 {\n    right: 1rem;\n}\n\n.rounded-full {\n    border-radius: 9999px;\n}\n\n.select-all {\n    user-select: all!important;\n}\n\n.shrink-0 {\n    flex-shrink: 0;\n}\n\n.min-w-0 {\n    min-width: 0;\n}\n\n.space-y-6>:not([hidden])~:not([hidden]) {\n    --tw-space-y-reverse: 0;\n    margin-top: calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));\n    margin-bottom: calc(1.5rem * var(--tw-space-y-reverse));\n}\n\n.truncate {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.whitespace-nowrap {\n    white-space: nowrap;\n}\n\n@media (min-width:768px) {\n    /* md */\n}\n\n@media (min-width:1024px) {\n    .lg\\:mt-0 {\n        margin-top: 0;\n    }\n\n    .lg\\:top-8 {\n        top: 2rem;\n    }\n}\n\n\n.toggle-switch {\n    position: relative;\n    outline: none;\n    background-color: rgb(229 231 235);\n    border: 1px solid rgb(107 114 128);\n    border-radius: 9999px;\n    cursor: pointer;\n    height: 20px;\n    width: 32px;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .toggle-switch {\n    background-color: rgb(255 255 255 / 5%);\n    border-color: rgb(255 255 255 / 1);\n}\n\n.toggle-switch[data-state=\"checked\"] {\n    background-color: rgb(0 0 0);\n    border-color: rgb(0 0 0);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .toggle-switch[data-state=\"checked\"] {\n    background-color: rgb(22 163 74);\n    border-color: rgb(22 163 74);\n}\n\n.toggle-switch-handle {\n    display: block;\n    background-color: rgb(255 255 255);\n    border-radius: 9999px;\n    height: 16px;\n    width: 16px;\n    transition: transform 0.1s;\n    will-change: transform;\n    transform: translateX(1px);\n}\n\n.toggle-switch-handle[data-state=\"checked\"] {\n    transform: translateX(14px);\n}\n\n.toggle-switch-handle:hover {\n    background-color: rgb(243 244 246);\n}\n\n.toggle-switch-label {\n    color: rgb(107 114 128);\n    margin-left: 0.75rem;\n    font-size: 0.875rem;\n    font-weight: 500;\n}\n\n.toggle-switch-label:hover {\n    color: rgb(71 85 105);\n}\n");
+	var SHELL_QUIET_MS = 400;
+	var SHELL_SETTLE_TIMEOUT_MS = 4e3;
+	var MESSAGE_UNIT_SELECTOR = "[data-chatgpt-conversation-selection-target] [data-chatgpt-search-message-ids]";
+	function whenShellSettled(callback) {
+		const start = () => {
+			let quietTimer;
+			let capTimer;
+			let done = false;
+			const observer = new MutationObserver(() => {
+				clearTimeout(quietTimer);
+				quietTimer = setTimeout(finish, SHELL_QUIET_MS);
+			});
+			function finish() {
+				if (done) return;
+				done = true;
+				clearTimeout(quietTimer);
+				clearTimeout(capTimer);
+				observer.disconnect();
+				requestAnimationFrame(callback);
+			}
+			capTimer = setTimeout(finish, SHELL_SETTLE_TIMEOUT_MS);
+			quietTimer = setTimeout(finish, SHELL_QUIET_MS);
+			observer.observe(document.body, {
+				childList: true,
+				subtree: true
+			});
+		};
+		if (document.readyState === "complete") start();
+		else window.addEventListener("load", start, { once: true });
+	}
 	main();
 	function main() {
 		watchTemporaryChatId();
@@ -22950,6 +23049,7 @@
 			styleEl.id = "sentinel-css";
 			document.head.append(styleEl);
 			const injectionMap = new Map();
+			let hydrated = false;
 			const injectNavMenu = ({ target, insert }) => {
 				if (injectionMap.has(target)) return;
 				console.log("[Exporter] Injecting nav", target);
@@ -22958,6 +23058,7 @@
 				insert(container);
 			};
 			const syncNavMenu = () => {
+				if (!hydrated) return;
 				const mounts = getNavMenuMounts();
 				const activeTargets = new Set(mounts.map(({ target }) => target));
 				injectionMap.forEach((container, target) => {
@@ -22967,6 +23068,8 @@
 					}
 				});
 				mounts.forEach(injectNavMenu);
+				const floatingHost = document.getElementById(FLOATING_HOST_ID);
+				if (floatingHost && floatingHost.children.length === 0) floatingHost.remove();
 			};
 			for (const selector of [
 				PROFILE_BUTTON_SELECTOR,
@@ -22974,7 +23077,10 @@
 				RAIL_MENU_BUTTON_SELECTOR,
 				AUTOMATIONS_SELECTOR
 			]) import_sentinel_umd.default.on(selector, syncNavMenu);
-			syncNavMenu();
+			whenShellSettled(() => {
+				hydrated = true;
+				syncNavMenu();
+			});
 			setInterval(syncNavMenu, 1e3);
 			if (isSharePage()) import_sentinel_umd.default.on(`div[role="presentation"] > .w-full > div >.flex.w-full`, (target) => {
 				target.prepend(getMenuContainer());
@@ -23066,31 +23172,5 @@
 		container.style.zIndex = "99";
 		D$4(o$5(Menu, { container }), container);
 		return container;
-	}
-	function getNavMenuInsertionTarget(target) {
-		const wrapper = target.parentElement;
-		if (!wrapper || wrapper.children.length !== 1) return target;
-		return wrapper;
-	}
-	function getNavMenuMounts() {
-		const profileButtons = Array.from(document.querySelectorAll(PROFILE_BUTTON_SELECTOR));
-		if (profileButtons.length > 0) return profileButtons.map((target) => ({
-			target,
-			insert: (container) => getNavMenuInsertionTarget(target).before(container)
-		}));
-		const profileFooters = Array.from(document.querySelectorAll(SIDEBAR_SCROLL_SELECTOR)).map((scrollRoot) => scrollRoot.nextElementSibling).filter((footer) => !!footer?.querySelector("button[aria-haspopup=\"menu\"]"));
-		if (profileFooters.length > 0) return profileFooters.map((target) => ({
-			target,
-			insert: (container) => target.prepend(container)
-		}));
-		const railMenuButton = document.querySelector(RAIL_MENU_BUTTON_SELECTOR);
-		if (railMenuButton) return [{
-			target: railMenuButton,
-			insert: (container) => getNavMenuInsertionTarget(railMenuButton).before(container)
-		}];
-		return Array.from(document.querySelectorAll(AUTOMATIONS_SELECTOR)).map((target) => ({
-			target,
-			insert: (container) => getNavMenuInsertionTarget(target).before(container)
-		}));
 	}
 })(JSZip, window);

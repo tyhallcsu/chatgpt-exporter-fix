@@ -4,21 +4,62 @@ import { fetchConversation, processConversation } from './api'
 import { getChatIdFromUrl, isSharePage } from './page'
 import { watchTemporaryChatId } from './temporaryChat'
 import { Menu } from './ui/Menu'
+import {
+    AUTOMATIONS_SELECTOR,
+    FLOATING_HOST_ID,
+    PROFILE_BUTTON_SELECTOR,
+    RAIL_MENU_BUTTON_SELECTOR,
+    SIDEBAR_SCROLL_SELECTOR,
+    getNavMenuMounts,
+} from './utils/navMount'
+import type { NavMenuMount } from './utils/navMount'
 import { onloadSafe } from './utils/utils'
 
 import './i18n'
 import './styles/missing-tailwind.css'
 
-const PROFILE_BUTTON_SELECTOR = '[data-testid="accounts-profile-button"]'
-const SIDEBAR_SCROLL_SELECTOR = '[data-app-action-sidebar-scroll]'
-const AUTOMATIONS_SELECTOR = '[data-sidebar-destination="builtin:automations"]'
-// The redesigned navigation rail keeps the help and profile menus in its footer.
+/** How long the shell must stop mutating before the first injection. */
+const SHELL_QUIET_MS = 400
+/** Upper bound on waiting, for pages that never fall completely quiet. */
+const SHELL_SETTLE_TIMEOUT_MS = 4000
+/** The rendered conversation block that carries its message ids. */
 const MESSAGE_UNIT_SELECTOR = '[data-chatgpt-conversation-selection-target] [data-chatgpt-search-message-ids]'
-const RAIL_MENU_BUTTON_SELECTOR = '[data-app-navigation-rail] button[aria-haspopup="menu"]'
 
-interface NavMenuMount {
-    target: Element
-    insert: (container: Element) => void
+/**
+ * ChatGPT server-renders its shell and hydrates it after load. Inserting into a
+ * container React is still hydrating makes it report a hydration mismatch
+ * (#418), throw the server markup away and re-render — destroying the menu we
+ * just mounted. `load` alone is not late enough because React Router keeps
+ * hydrating route chunks after it; waiting for the DOM itself to go quiet is,
+ * and needs no knowledge of ChatGPT's internals.
+ */
+function whenShellSettled(callback: () => void) {
+    const start = () => {
+        let quietTimer: ReturnType<typeof setTimeout>
+        let capTimer: ReturnType<typeof setTimeout>
+        let done = false
+
+        const observer = new MutationObserver(() => {
+            clearTimeout(quietTimer)
+            quietTimer = setTimeout(finish, SHELL_QUIET_MS)
+        })
+
+        function finish() {
+            if (done) return
+            done = true
+            clearTimeout(quietTimer)
+            clearTimeout(capTimer)
+            observer.disconnect()
+            requestAnimationFrame(callback)
+        }
+
+        capTimer = setTimeout(finish, SHELL_SETTLE_TIMEOUT_MS)
+        quietTimer = setTimeout(finish, SHELL_QUIET_MS)
+        observer.observe(document.body, { childList: true, subtree: true })
+    }
+
+    if (document.readyState === 'complete') start()
+    else window.addEventListener('load', start, { once: true })
 }
 
 main()
@@ -37,6 +78,7 @@ function main() {
         document.head.append(styleEl)
 
         const injectionMap = new Map<Element, Element>()
+        let hydrated = false
 
         const injectNavMenu = ({ target, insert }: NavMenuMount) => {
             if (injectionMap.has(target)) return
@@ -50,6 +92,8 @@ function main() {
         }
 
         const syncNavMenu = () => {
+            if (!hydrated) return
+
             const mounts = getNavMenuMounts()
             const activeTargets = new Set(mounts.map(({ target }) => target))
             injectionMap.forEach((container, target) => {
@@ -60,6 +104,9 @@ function main() {
             })
 
             mounts.forEach(injectNavMenu)
+
+            const floatingHost = document.getElementById(FLOATING_HOST_ID)
+            if (floatingHost && floatingHost.children.length === 0) floatingHost.remove()
         }
 
         // Sentinel handles new sidebar nodes immediately. Polling remains as a
@@ -67,7 +114,12 @@ function main() {
         for (const selector of [PROFILE_BUTTON_SELECTOR, SIDEBAR_SCROLL_SELECTOR, RAIL_MENU_BUTTON_SELECTOR, AUTOMATIONS_SELECTOR]) {
             sentinel.on(selector, syncNavMenu)
         }
-        syncNavMenu()
+        // Held back until the shell stops re-rendering; injecting during
+        // hydration makes React discard the tree and the menu with it.
+        whenShellSettled(() => {
+            hydrated = true
+            syncNavMenu()
+        })
         setInterval(syncNavMenu, 1000)
 
         // Support for share page
@@ -189,45 +241,4 @@ function getMenuContainer() {
     container.style.zIndex = '99'
     render(<Menu container={container} />, container)
     return container
-}
-
-function getNavMenuInsertionTarget(target: Element) {
-    const wrapper = target.parentElement
-    if (!wrapper || wrapper.children.length !== 1) return target
-
-    return wrapper
-}
-
-function getNavMenuMounts(): NavMenuMount[] {
-    const profileButtons = Array.from(document.querySelectorAll(PROFILE_BUTTON_SELECTOR))
-    if (profileButtons.length > 0) {
-        return profileButtons.map(target => ({
-            target,
-            insert: container => getNavMenuInsertionTarget(target).before(container),
-        }))
-    }
-
-    const profileFooters = Array.from(document.querySelectorAll(SIDEBAR_SCROLL_SELECTOR))
-        .map(scrollRoot => scrollRoot.nextElementSibling)
-        .filter((footer): footer is Element => !!footer?.querySelector('button[aria-haspopup="menu"]'))
-    if (profileFooters.length > 0) {
-        return profileFooters.map(target => ({
-            target,
-            insert: container => target.prepend(container),
-        }))
-    }
-
-    // Place the menu above the first footer menu, which is the help menu.
-    const railMenuButton = document.querySelector(RAIL_MENU_BUTTON_SELECTOR)
-    if (railMenuButton) {
-        return [{
-            target: railMenuButton,
-            insert: container => getNavMenuInsertionTarget(railMenuButton).before(container),
-        }]
-    }
-
-    return Array.from(document.querySelectorAll(AUTOMATIONS_SELECTOR)).map(target => ({
-        target,
-        insert: container => getNavMenuInsertionTarget(target).before(container),
-    }))
 }
