@@ -1,11 +1,60 @@
-<h1 align="center">ChatGPT Exporter</h1>
+<p align="center">
+  <img src="assets/repository-banner.jpg" alt="Conversation lines becoming export documents, with a mint repair stitch on an indigo background." width="100%">
+</p>
+
+# ChatGPT Exporter · Repair Fork
+
+**Keep conversations portable. Keep the exporter working.**
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-source-3178c6?style=flat-square)](src/) [![MIT license](https://img.shields.io/badge/License-MIT-6ac9aa?style=flat-square)](LICENSE) [![Userscript](https://img.shields.io/badge/Install-Tampermonkey-59636e?style=flat-square)](#install-this-fork)
+
+[Install this fork](#install-this-fork) · [Repair notes](#repair-notes) · [Formats](#-supported-formats) · [Examples](#-example) · [Batch export](#-export-multiple-conversations) · [Development](#development)
+
+This private fork of [pionxzh/chatgpt-exporter](https://github.com/pionxzh/chatgpt-exporter) carries navigation, conversation-detection, and theme repairs for ChatGPT's changed interface. The userscript exports conversations as text, HTML, Markdown, PNG, or JSON; batch export also supports JSON ZIP.
+
+## Install this fork
+
+1. Install Tampermonkey using the [browser links below](#prerequisites).
+2. Download [dist/chatgpt.user.js](dist/chatgpt.user.js) from this authenticated repository checkout, or use its local copy.
+3. Disable or remove any older ChatGPT Exporter installation to avoid two copies mounting at once.
+4. In Tampermonkey, open **Dashboard → Utilities → Import from file** and choose `chatgpt.user.js`.
+5. Reload ChatGPT. Look for **Export** in the sidebar or its icon in the collapsed rail.
+
+This repository stays private. The upstream GreasyFork and raw-GitHub links below install the upstream version, not this fork's repairs. A public raw download URL is not this fork's installation path.
+
+## Repair notes
+
+| Area | Implementation / evidence |
+|---|---|
+| Sidebar, collapsed rail, and floating fallback | [Navigation mount strategies](src/utils/navMount.ts) |
+| Current and legacy conversation markup | [Thread selectors](src/utils/threadDom.ts) |
+| Theme handling | [Theme tests](tests/theme.test.ts) |
+| Investigation, installation, and known limitations | [Repair handoff](docs/2026-09-24-handoff.md) · [Findings](docs/2026-09-24-chatgpt-ui-repair-findings.md) |
+
+The handoff records prior live-site verification. Very long PNG exports can exceed renderer limits; API rate limits can delay the conversation list. The examples and screenshots below are inherited upstream material, not new captures of this fork.
+
+## Development
+
+Use the pinned **pnpm 8.14.1** and a Node version compatible with the checked-in dependencies (the package declares Node >=20). See [CONTRIBUTING.md](CONTRIBUTING.md) and the [repair handoff](docs/2026-09-24-handoff.md) for setup details.
+
+```bash
+pnpm install --frozen-lockfile
+pnpm test
+pnpm lint
+pnpm build
+```
+
+`pnpm test` runs TypeScript checking and Vitest. The build writes the tracked `dist/chatgpt.user.js`; source changes should include a rebuilt bundle. Presentation-only edits do not require replacing that bundle.
+
+## Upstream project and installation
+
 
 <div align="center">
 
-## A GreasyFork script to export the chat history of [ChatGPT](https://chatgpt.com/)
+A GreasyFork script to export the chat history of [ChatGPT](https://chatgpt.com/).
 
 [![license][license-image]][license-url]
-[![release][release-image]][release-url]
+[![Upstream release][release-image]][release-url]
 [![GreasyFork][GreasyFork-image]][GreasyFork-url]
 
 [license-image]: https://img.shields.io/github/license/pionxzh/chatgpt-exporter?color=red
@@ -17,9 +66,9 @@
 
 English &nbsp;&nbsp;|&nbsp;&nbsp; [Français](./README_FR.md) &nbsp;&nbsp;|&nbsp;&nbsp; [Indonesia](./README_ID.md) &nbsp;&nbsp;|&nbsp;&nbsp; [한국어](./README_KR.md) &nbsp;&nbsp;|&nbsp;&nbsp; [Türkçe](./README_TR.md)
 
-![image](https://github.com/pionxzh/chatgpt-exporter/assets/9910706/1c864670-7912-4484-b4be-bdf5dde51557)
+![Upstream exporter preview](https://github.com/pionxzh/chatgpt-exporter/assets/9910706/1c864670-7912-4484-b4be-bdf5dde51557)
 
-## Install
+### Upstream install
 
 ### Prerequisites
 
@@ -31,7 +80,7 @@ English &nbsp;&nbsp;|&nbsp;&nbsp; [Français](./README_FR.md) &nbsp;&nbsp;|&nbsp
 [link-firefox]: https://addons.mozilla.org/firefox/addon/tampermonkey 'Firefox Add-ons'
 [link-edge]: https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd 'Edge Add-ons'
 
-### UserScript
+### Upstream UserScript
 
 | Greasyfork                                                                        | GitHub                                                                                       |
 | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -44,13 +93,13 @@ English &nbsp;&nbsp;|&nbsp;&nbsp; [Français](./README_FR.md) &nbsp;&nbsp;|&nbsp
 
 > Make sure that the [`Allow User Scripts` is enabled](https://www.tampermonkey.net/faq.php?q=Q209) in your browser settings for Tampermonkey.
 
-#
+---
 
 [📚 Supported Formats](#-supported-formats) &nbsp;&nbsp;|&nbsp;&nbsp; [💡 Example](#-example) &nbsp;&nbsp;|&nbsp;&nbsp; [📤 Export Multiple Conversations](#-export-multiple-conversations) &nbsp;&nbsp;|&nbsp;&nbsp; [🤝 Contribution](#-contribution) &nbsp;&nbsp;|&nbsp;&nbsp; [⭐ Star History](#-star-history)
 
 </div>
 
-#
+---
 
 ## 📚 Supported Formats
 
@@ -86,7 +135,7 @@ consequences of using it in any given situation.
 
 <div align="center">
 
-<img width="643" alt="image" src="https://github.com/pionxzh/chatgpt-exporter/assets/9910706/47481c7a-4a6a-433b-b08e-fdf3bbabcb64">
+<img width="643" alt="Upstream HTML export example" src="https://github.com/pionxzh/chatgpt-exporter/assets/9910706/47481c7a-4a6a-433b-b08e-fdf3bbabcb64">
 
 </div>
 
@@ -111,7 +160,7 @@ It sounds like you're planning on creating a tool that uses the ChatGPT model to
 ### Screenshot
 
 <div align="center">
-<img width="480" src="https://user-images.githubusercontent.com/9910706/205663680-6ac97fac-39b0-495c-bee4-8ef37713a9ae.png" />
+<img width="480" alt="Upstream PNG export example" src="https://user-images.githubusercontent.com/9910706/205663680-6ac97fac-39b0-495c-bee4-8ef37713a9ae.png" />
 
 </div>
 
@@ -255,6 +304,8 @@ Check out [**DeepSeek Exporter**](https://github.com/pionxzh/deepseek-exporter) 
 See [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 ## ⭐ Star History
+
+Upstream project history: `pionxzh/chatgpt-exporter`.
 
 <div align="center">
 
