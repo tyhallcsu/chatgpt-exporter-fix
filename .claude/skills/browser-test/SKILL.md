@@ -49,6 +49,45 @@ node scripts/export.mjs JSON "OpenAI Official Format"
 To open a conversation, click it in the sidebar through `eval.mjs`, for
 example `[...document.querySelectorAll('a, button')].find(e => e.textContent.trim() === 'Title').click()`.
 
+## Real userscript manager (tier M)
+
+The loop above injects the build through a `GM_*` shim. That is not the product:
+it proves nothing about the manager's own matching, grants, run-at, storage or
+update behaviour. For those, run the build under a real Tampermonkey.
+
+```sh
+./scripts/start-manager-chrome.sh                      # persistent profile + CDP 9333
+node scripts/manager-state.mjs                         # what is installed and enabled
+node scripts/install-userscript.mjs ../../../dist/chatgpt-exporter-review.user.js
+node scripts/manager-script-settings.mjs "review build"
+```
+
+Paths are configurable — `MANAGER_PROFILE`, `MANAGER_CDP_PORT`, `CHROME_BIN`,
+`MANAGER_SERVE_PORT`, `TM_EXTENSION_ID`.
+
+Things learned the hard way:
+
+- **Command-line extension loading is gone.** In Chrome 153 `--load-extension` is
+  silently ignored — `extensions.settings` stays empty — and
+  `--enable-unsafe-extension-debugging` does not bring it back. The profile has
+  to carry the extension. Copying a whole profile directory that already has
+  Tampermonkey works: Chrome's preference MACs are not keyed on the profile path,
+  so the extension stays enabled at the new location. Delete the copied `Cookies`,
+  `History`, `Login Data` and `Sessions` afterwards.
+- **Install through the manager's own prompt**, by serving the file over loopback
+  and letting Tampermonkey intercept the `.user.js` navigation. The button it
+  offers is the evidence: `Install` means a second entry, `Update` or `Reinstall`
+  means it replaces an existing one.
+- **A different `@name` duplicates rather than replaces.** Two enabled exporters
+  both run. `manager-state.mjs` warns when that happens; check it before
+  attributing any behaviour to the build.
+- **`@updateURL none` does not disable updates.** Tampermonkey keeps *Check for
+  updates* ticked and stores the literal string `none` as the URL. Untick it in
+  the script's Settings tab (Advanced config mode) and verify with
+  `manager-script-settings.mjs`. The setting survives a browser restart.
+- The manager's dashboard needs trusted input for some controls; `manager.mjs`
+  exposes `realClick`, which dispatches real CDP mouse events.
+
 ## Inspecting output
 
 - Crop with ffmpeg: `ffmpeg -i in.png -vf crop=W:H:X:Y out.png`. Do not use
