@@ -1,5 +1,45 @@
 # Changelog
 
+## [2.36.2](https://github.com/pionxzh/chatgpt-exporter/compare/userscript-v2.36.1...userscript-v2.36.2) (2026-09-26)
+
+
+### Bug Fixes
+
+* follow ChatGPT's accent color for checkboxes and toggles ([188ba3b](https://github.com/pionxzh/chatgpt-exporter/commit/188ba3b2b43bcb58ba77880408facfd84813076b))
+* keep the exporter menu visible in the collapsible sidebar layout ([11de3cd](https://github.com/pionxzh/chatgpt-exporter/commit/11de3cdff577970ee121c65ead05158f518e1a2d))
+
+## [2.36.1](https://github.com/pionxzh/chatgpt-exporter/compare/userscript-v2.36.0...userscript-v2.36.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* escape non-assistant text in HTML export ([8be1e9a](https://github.com/pionxzh/chatgpt-exporter/commit/8be1e9af26dde8201a55cbcbe0faed5074adca3f))
+* keep multi-line math intact in HTML export ([#264](https://github.com/pionxzh/chatgpt-exporter/issues/264)) ([932f9ea](https://github.com/pionxzh/chatgpt-exporter/commit/932f9eab2edd8c4f301618610a9fd32b81d91a5c))
+* list uploaded files in HTML and Markdown exports ([a8682e6](https://github.com/pionxzh/chatgpt-exporter/commit/a8682e657178fae8e50cb88d736f2c3971001859))
+* match ChatGPT's math and inline code styles in HTML export ([d7552bc](https://github.com/pionxzh/chatgpt-exporter/commit/d7552bc0eb3831aacb43717cfa9ac1a45f59bd71))
+* pad code blocks in HTML export ([4c80341](https://github.com/pionxzh/chatgpt-exporter/commit/4c80341e95f39d8f06fda3a5c4fd56e5e926e0b0))
+* render code messages as code blocks in markdown export ([0325599](https://github.com/pionxzh/chatgpt-exporter/commit/032559950c015b72adbc6c4469e41b8f8f9c2714))
+* stop rendering prices as math in HTML export ([b6f9a0b](https://github.com/pionxzh/chatgpt-exporter/commit/b6f9a0b7b1fcb583f3549846d54130c63bfe71a2))
+
+## [2.36.0](https://github.com/pionxzh/chatgpt-exporter/compare/userscript-v2.35.2...userscript-v2.36.0) (2026-09-25)
+
+
+### Features
+
+* cache conversations and images to skip refetching on export ([471e877](https://github.com/pionxzh/chatgpt-exporter/commit/471e877919c71d476369d15f4fcde7f34d7a6615))
+* show the cached conversation list instantly in Export All ([816d9fe](https://github.com/pionxzh/chatgpt-exporter/commit/816d9fe7b929d63b254f806b380f814a0005358e))
+
+
+### Bug Fixes
+
+* alert which conversations were skipped in batch export ([75a2d4d](https://github.com/pionxzh/chatgpt-exporter/commit/75a2d4d9b153cbc41cfcc38e54c2bf1195f7db58))
+* capture the full conversation in screenshots on the redesigned layout ([49a4c2b](https://github.com/pionxzh/chatgpt-exporter/commit/49a4c2bd3090817a22d0f41287c343c38930e628))
+* expose exporter menu items as buttons ([061d81f](https://github.com/pionxzh/chatgpt-exporter/commit/061d81f0da9493bec86819ec62a0c9053900868e))
+* place exporter above the help menu in the redesigned rail ([bdebb09](https://github.com/pionxzh/chatgpt-exporter/commit/bdebb095a18203aa6d3aa7e40e9d802d41994438))
+* restore menu hover on the redesigned layout ([48178f4](https://github.com/pionxzh/chatgpt-exporter/commit/48178f40284b5fd1902d656c4dd80b30741c7b08))
+* show message timestamps on the redesigned layout ([ca91cbf](https://github.com/pionxzh/chatgpt-exporter/commit/ca91cbf36e2b971615d7411eef15d7028d6211f8))
+* support redesigned ChatGPT layout and theme attributes ([4a48c24](https://github.com/pionxzh/chatgpt-exporter/commit/4a48c244a9867b39a50c83120e893b468926892e))
+
 ## [2.35.2](https://github.com/pionxzh/chatgpt-exporter/compare/userscript-v2.35.1...userscript-v2.35.2) (2026-09-23)
 
 

@@ -1,3 +1,7 @@
+.ce-timestamp {
+    color: var(--color-text-tertiary, var(--text-tertiary, #8f8f8f));
+}
+
 span[data-time-format] {
     display: none;
 }
@@ -18,39 +22,26 @@ body[data-time-format="24"] span[data-time-format="24"] {
     box-shadow: 0 0 0 1px #6f6e77;
 }
 
-[data-ce-theme="dark"] .Select {
+:is(.dark, [data-theme="dark"]) .Select {
     background-color: #2f2f2f;
     color: #fff;
     box-shadow: 0 0 0 1px #6f6e77;
 }
 
 html {
-    --ce-text-primary: var(--text-primary, #0d0d0d);
+    --ce-text-primary: var(--color-text-primary, var(--text-primary, #0d0d0d));
     --ce-menu-primary: #ffffff;
     --ce-menu-secondary: var(--sidebar-surface-secondary, #ececec);
     --ce-border-light: #0d0d0d26;
+    --ce-hover: var(--color-token-list-hover-background, rgba(0, 0, 0, .05));
 }
 
-/* `data-ce-theme` is stamped on <html> by utils/theme.ts, which resolves the
-   scheme from ChatGPT's own declaration and, failing that, from the
-   background it actually painted. */
-[data-ce-theme="dark"] {
-    --ce-text-primary: var(--text-primary, #ececec);
+:is(.dark, [data-theme="dark"]) {
+    --ce-text-primary: var(--color-text-primary, var(--text-primary, #ececec));
     --ce-menu-primary: #2A2A2A;
     --ce-menu-secondary: var(--sidebar-surface-secondary, #212121);
-    --ce-border-light: var(--border-default, rgba(255, 255, 255, .15));
-}
-
-/* Insurance for the moment before that attribute lands — and for the case
-   where the script fails to run at all. Skipped once we have resolved light,
-   so an explicit light theme under a dark OS is not overridden. */
-@media (prefers-color-scheme: dark) {
-    html:not([data-ce-theme="light"]) {
-        --ce-text-primary: var(--text-primary, #ececec);
-        --ce-menu-primary: #2A2A2A;
-        --ce-menu-secondary: var(--sidebar-surface-secondary, #212121);
-        --ce-border-light: var(--border-default, rgba(255, 255, 255, .15));
-    }
+    --ce-border-light: var(--color-token-border-default, var(--border-default, rgba(255, 255, 255, .15)));
+    --ce-hover: var(--color-token-list-hover-background, rgba(255, 255, 255, .1));
 }
 
 /* Define our own background in both themes — this used to lean on
@@ -59,7 +50,7 @@ html {
     background-color: var(--ce-menu-primary);
 }
 
-[data-ce-theme="dark"] .bg-menu {
+:is(.dark, [data-theme="dark"]) .bg-menu {
     background-color: var(--ce-menu-primary);
 }
 
@@ -95,56 +86,28 @@ html {
     justify-content: center;
     gap: 0;
     border-radius: 8px;
-    color: var(--text-secondary, var(--ce-text-primary));
+    color: var(--color-text-secondary, var(--text-secondary, var(--ce-text-primary)));
 }
 
+/* ChatGPT no longer ships the `hoverable` styles these items relied on. */
+.menu-item.hoverable:not([disabled]):hover,
 .ce-nav-trigger-collapsed:hover {
-    background-color: var(--sidebar-surface-secondary, rgba(255, 255, 255, 0.1));
+    background-color: var(--ce-hover);
 }
 
 .ce-nav-trigger-collapsed .ce-menu-item-text {
     display: none;
 }
 
-/* --- Mount-specific trigger styling -------------------------------------
-   The menu is placed by `utils/navMount.ts`, which tags its container with
-   `data-ce-mount`. Each surface needs different spacing, so the styling is
-   keyed off the mount instead of being baked into the component. */
-
-/* Expanded sidebar: the menu is the panel's last row. */
-[data-ce-mount="sidebar-panel"] {
-    flex: 0 0 auto;
-    padding: 0.25rem 0.5rem 0.5rem;
-}
-
-/* Collapsed sidebar: match the icon rail's square buttons. */
-[data-ce-mount="nav-rail"] {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    padding-bottom: 0.25rem;
-}
-
-/* Last-resort launcher: a small floating button that stays clear of
-   ChatGPT's own controls and below its dialogs. */
-#chatgpt-exporter-floating-root {
-    position: fixed;
-    left: 12px;
-    bottom: 12px;
-    z-index: 998;
-}
-
-#chatgpt-exporter-floating-root [data-ce-mount="floating"] .ce-nav-trigger {
-    padding: 0.375rem 0.75rem;
-    border-radius: 9999px;
-    background-color: var(--ce-menu-secondary, rgba(0, 0, 0, 0.75));
-    color: var(--ce-text-primary, #fff);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-}
-
 .ce-card {
+    color: var(--ce-text-primary);
     border-radius: 1rem;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.ce-card .menu-item {
+    column-gap: 8px;
+    padding-inline-start: 8px;
 }
 
 /* ChatGPT's main column carries its own z-index, which beats the menu's
@@ -155,7 +118,7 @@ html {
     z-index: 999 !important;
 }
 
-[data-ce-theme="dark"] .ce-card {
+:is(.dark, [data-theme="dark"]) .ce-card {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 

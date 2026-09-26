@@ -1,0 +1,159 @@
+{
+  "updated": "2026-09-26",
+  "phase": "reconciled-onto-2.36.2",
+  "recommendation": "B now (reduce private repo to QA/reference); C after PR #400 merges (retire the product fork)",
+  "next_action": "None required. Watch pionxzh/chatgpt-exporter#400; when it merges, drop bd823cd and the branch becomes a pure QA overlay on upstream.",
+  "posture": {
+    "repo_private": true,
+    "published": false,
+    "releases": 0,
+    "tags_created": 0,
+    "greasyfork": "not updated",
+    "private_master_merged": false,
+    "private_master_moved_by_us": false,
+    "public_prs_opened_this_run": 0,
+    "pr_400_modified_this_run": false
+  },
+  "refs": {
+    "branch": "review/reconcile-upstream-2.36.2",
+    "upstream_base": "e59449ab7ff428ad86aa95e2d0be444db221ab5d",
+    "upstream_release": "userscript-v2.36.2 = 2e8b65b7ce85af527d8be51b1e535a99c5cfddcb",
+    "upstream_placement_fix": "11de3cdff577970ee121c65ead05158f518e1a2d",
+    "upstream_accent_fix": "188ba3b2b43bcb58ba77880408facfd84813076b",
+    "pr_400_head": "396398858c3eeb25158877138dba9f7733cc7b8d",
+    "pr_400_cherry_pick": "bd823cd",
+    "pr_400_tree_identical": "8bdee6c08abb334a90fd9eb067d83f6eb4291cc4",
+    "artifact_source_commit": "8f1284a",
+    "preserved_previous_line": "review/reconcile-upstream-2.36.1 @ ceeaa55",
+    "preserved_placement_work": "wip/launcher-placement-superseded @ f6fcd31",
+    "worktree": "~/Documents/GitHub/chatgpt-exporter/.claude/worktrees/chatgpt-exporter-reconcile-2362"
+  },
+  "artifacts": {
+    "review": {
+      "path": "dist/chatgpt-exporter-review.user.js",
+      "version": "2.36.2-review.627.8f1284a",
+      "source_commit": "8f1284a",
+      "sha256": "596d71dc50075294c4af2084bdb2fc1d932894b0b6f8596ee956e61a81e4f60d",
+      "bytes": 830165,
+      "reproducible": "byte-identical on a repeat build from 8f1284a with pnpm 8.14.1",
+      "not_rebuilt_for": "QA-script and documentation commits after 8f1284a"
+    },
+    "rollback_official_2_36_2": {
+      "path": "~/.chatgpt-exporter-artifacts/official-2.36.2-e59449a.user.js",
+      "version": "2.36.2",
+      "sha256": "26aa55ee5194d1f15afd9c584e57b0ca341dd2fef0c5e01a604c0fdf8c862772",
+      "bytes": 829325,
+      "provenance": "extracted verbatim from e59449a:dist/chatgpt.user.js — upstream's own CI build, not a local rebuild"
+    },
+    "history": {
+      "review_2_36_1": "~/.chatgpt-exporter-artifacts/review-637.36db050.user.js (4e35d1b013f1726e7164cf44d36e98b36a7c01b7b4661055bfd4923cfe29e844)",
+      "rollback_2_35_2": "~/.chatgpt-exporter-artifacts/rollback-2.35.2-3b38d30.user.js (11133adf16f9e52c932ccc34a43466b0c2ca5f06bf5fae4252c306c2021901d8)"
+    }
+  },
+  "product_delta_vs_upstream": {
+    "summary": "PR #400 only",
+    "files": [
+      "src/api.ts — RateLimitError.retryAfterFromServer",
+      "src/ui/ExportDialog.tsx — describeListLoadError, error surfaced from fetchAllConversations onError, stale error cleared per load",
+      "tests/export-dialog-list-load.test.tsx",
+      "tests/rate-limit-error.test.ts",
+      "vitest.config.ts — preact plugin and .tsx include for those tests"
+    ],
+    "becomes_zero_when": "pionxzh/chatgpt-exporter#400 merges"
+  },
+  "dropped_as_superseded": [
+    "src/utils/navMount.ts — upstream 11de3cd solved placement independently",
+    "src/main.tsx nav-mount extraction",
+    "src/style.css data-ce-mount placement CSS",
+    "sidebar footer-height reservation",
+    "collapsed-rail private implementation",
+    "floating fallback launcher (narrow + drawer closed) — optional fork feature, not a defect",
+    "src/utils/shellSettle.ts and the whenShellSettled gate — console-only #418, no user-facing failure",
+    "src/utils/rateLimit.ts — PR #400 keeps RateLimitError in api.ts instead",
+    "src/styles/missing-tailwind.css and src/ui/CheckBox.css dark-accent pairs — upstream 188ba3b uses var(--color-chart-blue)",
+    "tests/nav-mount.test.ts, tests/shell-settle.test.ts, tests/export-dialog-errors.test.ts, tests/export-dialog-list.test.tsx"
+  ],
+  "kept_private": {
+    "qa_tooling": [
+      "manager.mjs (build-agnostic mount detection via .ce-nav-trigger)",
+      "manager-state.mjs, manager-enable.mjs, manager-toggle.mjs, manager-script-settings.mjs",
+      "install-userscript.mjs",
+      "cold-load-console.mjs",
+      "launcher-placement-check.mjs (five real faults corrected this pass)",
+      "spa-nav-check.mjs",
+      "background-load-check.mjs",
+      "goto-conversation.mjs, page-probe.mjs, api-health.mjs, export-all-probe.mjs, manager-export.mjs, close-dialog.mjs",
+      "start-manager-chrome.sh"
+    ],
+    "review_build_tooling": [
+      "vite.config.ts REVIEW_BUILD_ID / REVIEW_BUILD_SEQ mode",
+      "package.json build:review"
+    ],
+    "docs": ["HANDOFF.md", "progress.json", "docs/upstream-comparison.md", "docs/verification-matrix.md", "docs/2.36.2-reconciliation.md"]
+  },
+  "react_418": {
+    "method": "4 cold loads per condition, new tab each, 1440x813 CSS viewport, same profile and session, exactly one exporter enabled per run",
+    "no_exporter": { "loads": 4, "loads_with_418": 0, "usable_launcher": "n/a" },
+    "official_2_36_2": { "loads": 4, "loads_with_418": 4, "usable_launcher": "4/4", "exporter_runtime_errors": 0 },
+    "candidate": { "loads": 4, "loads_with_418": 4, "usable_launcher": "4/4", "trigger": "314x46", "exporter_runtime_errors": 0 },
+    "conclusion": "Caused by any exporter mounting during hydration; console-only; identical between official and candidate; launcher present and clickable in every load. shellSettle DROPPED."
+  },
+  "placement": {
+    "harness": "launcher-placement-check.mjs, corrected",
+    "result": "6/6 pass",
+    "cases": {
+      "expanded-1440x950": "PASS — 314x46 @ (14,708)",
+      "collapsed-rail-1440x950": "PASS — 32x32 @ (10,739)",
+      "short-1440x620": "PASS — 314x46 @ (14,414)",
+      "narrow-520-drawer-open": "PASS — 233x46 @ (14,694)",
+      "zoom125-equivalent-1152x760": "PASS — 314x46 @ (14,554)",
+      "zoom150-equivalent-960x633": "PASS — 314x46 @ (14,427)"
+    },
+    "account_footer_overlap": "none in any case",
+    "narrow_drawer_closed": "not applicable — ChatGPT renders no sidebar control of its own there"
+  },
+  "spa_navigation": {
+    "result": "6/6 pass",
+    "steps": ["initial document", "SPA to conversation A", "SPA to conversation B", "SPA to home", "history back", "history forward"],
+    "invariant": "exactly one rendered launcher, no detached mounts, trigger 314x46, menu opens on a real click"
+  },
+  "attribution_controls": {
+    "exporters_enabled_per_run": 1,
+    "official_reference": "reinstalled from the byte-known e59449a artifact",
+    "teamhub_chat_exporter": {
+      "scope": "https://app.teamhub.com/chat/* and https://*.teamhub.com/chat/* — cannot match chatgpt.com",
+      "original_state": "enabled",
+      "during_acceptance": "disabled",
+      "after": "restored to enabled"
+    },
+    "owner_normal_profile": "not touched",
+    "browser_state_in_git": "none"
+  },
+  "exports": {
+    "blocked_reason": "ChatGPT returned 429 for /backend-api/conversations, /backend-api/conversation/<id> and /backend-api/conversations/<id> on its own page requests; 59 other backend calls in the same load returned 200. No conversation body renders.",
+    "markdown": "BLOCKED BY CHATGPT 429 — one bounded attempt, menu item clicked, no download within 50s, not retried",
+    "copy_text": "NOT REVALIDATED on this candidate — same throttled source endpoint",
+    "html": "NOT REVALIDATED on this candidate — same throttled source endpoint",
+    "json": "NOT REVALIDATED on this candidate — same throttled source endpoint",
+    "screenshot": "NOT REVALIDATED on this candidate — captures the rendered thread, which does not render",
+    "export_all_two_chat_zip": "BLOCKED BY CHATGPT 429 — not produced, not claimed"
+  },
+  "export_all_pr400_acceptance": {
+    "list_endpoint_status": 429,
+    "dialog_opens": true,
+    "error_shown": "Error: Rate limited by the API · wait a moment and try again",
+    "counter": "0 / 0, now accompanied by the error",
+    "export_button": "disabled",
+    "wording": "no-Retry-After variant — the server sent none, so no wait is quoted as the API's answer",
+    "verdict": "PASS — the throttled load is visible and is no longer indistinguishable from an empty account"
+  },
+  "harness_faults_corrected": [
+    "mount detection keyed on data-ce-mount, which only the private build sets — upstream measured as never mounting",
+    "pass required one DOM mount; upstream deliberately mounts in two shells and hides one — criterion is now one rendered launcher",
+    "Browser.setWindowBounds assumed to work; on macOS it is advisory and a case could measure the previous case's viewport",
+    "sidebar toggles used element.click() on the first match, which can be the hidden copy and does nothing at drawer widths",
+    "Escape sent unconditionally also closed ChatGPT's drawer, so the narrow drawer-open case measured drawer-shut"
+  ],
+  "issue": "https://github.com/tyhallcsu/chatgpt-exporter-fix/issues/5",
+  "public_pr": "https://github.com/pionxzh/chatgpt-exporter/pull/400"
+}

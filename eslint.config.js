@@ -6,7 +6,11 @@ export default pionxzh(
         react: true,
         vue: false,
         yaml: false,
-        ignores: ['*.md', '.release-please-manifest.json'],
+        // `desktop/` is the packaging project, not the userscript: plain
+        // browser JS against `window.__TAURI__`, Node build scripts and a Rust
+        // crate. It is linted by its own toolchain, not by the exporter's
+        // React-flavoured config.
+        ignores: ['*.md', '.release-please-manifest.json', 'desktop/**'],
     },
     {
         rules: {

@@ -1,0 +1,22 @@
+{
+  "name": "chatgpt-exporter-desktop",
+  "private": true,
+  "type": "module",
+  "version": "2.36.2",
+  "description": "Desktop installer/helper that hands the ChatGPT Exporter userscript to your browser's userscript manager.",
+  "license": "MIT",
+  "packageManager": "pnpm@8.14.1",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "prepare:userscript": "node scripts/prepare-userscript.mjs",
+    "verify:userscript": "node scripts/prepare-userscript.mjs --verify-only",
+    "tauri": "tauri",
+    "dev": "pnpm run prepare:userscript && tauri dev",
+    "build": "pnpm run prepare:userscript && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.5"
+  }
+}

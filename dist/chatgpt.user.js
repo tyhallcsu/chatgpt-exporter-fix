@@ -3,7 +3,7 @@
 // @name:zh-CN         ChatGPT Exporter
 // @name:zh-TW         ChatGPT Exporter
 // @namespace          pionxzh
-// @version            2.35.2
+// @version            2.36.2
 // @author             pionxzh
 // @description        Export ChatGPT conversations with one click — backup & share effortlessly!
 // @description:zh-CN  一键导出 ChatGPT 对话，轻松备份与分享
@@ -566,56 +566,6 @@
 			reader.readAsDataURL(blob);
 		});
 	}
-	var TURN_SELECTORS = [
-		"[data-turn-key]",
-		"[data-testid^=\"conversation-turn-\"]",
-		"[data-turn-id-container]"
-	];
-	var THREAD_SCROLL_SELECTORS = ["[data-app-action-timeline-scroll]", "[data-scroll-root]"];
-	var THREAD_CONTAINER_SELECTORS = [
-		"[data-thread-find-target=\"conversation\"]",
-		"[data-chatgpt-conversation-selection-target]",
-		"#thread"
-	];
-	var MESSAGE_SELECTORS = ["[data-chatgpt-selection-message-id]", "[data-message-id]"];
-	function anyOf(selectors) {
-		return selectors.join(", ");
-	}
-	function queryFirstMatching(root, selectors) {
-		for (const selector of selectors) try {
-			const found = Array.from(root.querySelectorAll(selector));
-			if (found.length > 0) return found;
-		} catch {}
-		return [];
-	}
-	function getConversationTurns(root = document) {
-		return queryFirstMatching(root, TURN_SELECTORS);
-	}
-	function hasRenderedConversation(root = document) {
-		return getConversationTurns(root).length > 0;
-	}
-	function findThreadContainer(turns, root = document) {
-		const marked = queryFirstMatching(root, THREAD_CONTAINER_SELECTORS).find((element) => turns.length === 0 || turns.every((turn) => element.contains(turn)));
-		if (marked) return marked;
-		return findCommonAncestor(turns);
-	}
-	function findCommonAncestor(elements) {
-		let ancestor = elements[0]?.parentElement;
-		while (ancestor && !elements.every((element) => ancestor.contains(element))) ancestor = ancestor.parentElement;
-		return ancestor;
-	}
-	function findScrollRoot(thread) {
-		if (!thread) return null;
-		const marked = thread.closest(anyOf(THREAD_SCROLL_SELECTORS));
-		if (marked) return marked;
-		let element = thread.parentElement;
-		while (element) {
-			const style = typeof getComputedStyle === "function" ? getComputedStyle(element) : null;
-			if (!!style && /auto|scroll/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 4) return element;
-			element = element.parentElement;
-		}
-		return null;
-	}
 	function getChatIdFromUrl() {
 		const match = location.pathname.match(/^\/(?:share(?:\/[a-z]+)?|c|g\/[a-z0-9-]+\/c)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
 		if (match) return match[1];
@@ -642,7 +592,7 @@
 		return defaultAvatar;
 	}
 	function checkIfConversationStarted() {
-		return hasRenderedConversation();
+		return !!document.querySelector(["[data-testid^=\"conversation-turn-\"]", "[data-chatgpt-conversation-selection-target] [data-chatgpt-search-message-ids]"].join(", "));
 	}
 	function isCompleteConversation(conversation) {
 		return !!conversation?.mapping && !!conversation.current_node;
@@ -992,11 +942,13 @@
 	}
 	var RateLimitError = class extends Error {
 		retryAfterMs;
+		retryAfterFromServer;
 		constructor(retryAfterHeader) {
 			super("Too Many Requests (429)");
 			this.name = "RateLimitError";
 			const secs = retryAfterHeader != null ? Number.parseInt(retryAfterHeader, 10) : NaN;
-			this.retryAfterMs = Number.isFinite(secs) && secs > 0 ? secs * 1e3 : 3e4;
+			this.retryAfterFromServer = Number.isFinite(secs) && secs > 0;
+			this.retryAfterMs = this.retryAfterFromServer ? secs * 1e3 : 3e4;
 		}
 	};
 	var RATE_LIMIT_HEADERS = [
@@ -1096,6 +1048,9 @@
 			if (account) return account.account.account_id;
 		}
 		return null;
+	}
+	function getFileAttachmentNames(message) {
+		return (message.metadata?.attachments ?? []).filter((attachment) => attachment.name && !attachment.mime_type?.startsWith("image/")).map((attachment) => attachment.name);
 	}
 	function shouldSkipMessageInExport(message) {
 		if (!message || !message.content) return true;
@@ -8696,7 +8651,7 @@
 		ScriptStorage.set(KEY_LANGUAGE, lng);
 	});
 	var i18n_default = instance;
-	var template_default = "<!DOCTYPE html>\n<html lang=\"{{lang}}\" data-theme=\"{{theme}}\">\n<head>\n    <meta charset=\"UTF-8\" />\n    <link rel=\"icon\" href=\"https://chat.openai.com/favicon.ico\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>{{title}}</title>\n    <link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css\">\n    <script src=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js\"><\/script>\n    <script>\n        hljs.highlightAll()\n    <\/script>\n    <link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.3/katex.min.css\">\n    <script src=\"https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.3/katex.min.js\"><\/script>\n    <script src=\"https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.3/contrib/auto-render.min.js\"><\/script>\n    <script>\n        document.addEventListener(\"DOMContentLoaded\", function() {\n            renderMathInElement(document.body, {\n                delimiters: [\n                    { left: \"$$\", right: \"$$\", display: true },\n                    { left: \"$\", right: \"$\", display: false },\n                    { left: \"\\\\[\", right: \"\\\\]\", display: true },\n                    { left: \"\\\\(\", right: \"\\\\)\", display: false }\n                ],\n                throwOnError: false,\n                ignoredClasses: [\"no-katex\"],\n                preProcess: function(math) {\n                    return `\\\\displaystyle \\\\Large ${math}`;\n                }\n            });\n            document.querySelectorAll('.katex').forEach(function(el) {\n                const parent = el.parentNode;\n                const grandparent = parent.parentNode;\n                if (grandparent.tagName === 'P' && isOnlyContent(grandparent, parent)) {\n                    el.style.width = '100%';\n                    el.style.display = 'block';\n                    el.style.textAlign = 'center';\n                    parent.style.textAlign = 'center';\n                } else {\n                    el.style.display = 'inline-block';\n                    el.style.width = 'fit-content';\n                }\n            });\n            function isOnlyContent(parent, element) {\n                let onlyKaTeX = true;\n                parent.childNodes.forEach(function(child) {\n                    console.log(child.textContent);\n                    if (child !== element) {\n                        if (child.nodeType === Node.TEXT_NODE) {\n                            if (child.textContent.trim().length > 0) {\n                                onlyKaTeX = false;\n                            }\n                        } else if (child.nodeType === Node.ELEMENT_NODE) {\n                            onlyKaTeX = false;\n                        }\n                    }\n                });\n                return onlyKaTeX;\n            }\n        });\n    <\/script>\n\n    <style>\n        :root {\n            --page-text: #0d0d0d;\n            --page-bg: #fff;\n            --td-borders: #374151;\n            --th-borders: #4b5563;\n            --tw-prose-code: var(--page-text);\n            --tw-prose-counters: #9b9b9b;\n            --tw-prose-headings: var(--page-text);\n            --tw-prose-hr: rgba(0,0,0,.25);\n            --tw-prose-links: var(--page-text);\n            --tw-prose-quotes: var(--page-text);\n            --meta-title: #616c77;\n        }\n\n        [data-theme=\"dark\"] {\n            --page-text: #ececec;\n            --page-bg: #212121;\n            --tw-prose-code: var(--page-text);\n            --tw-prose-counters: #9b9b9b;\n            --tw-prose-headings: var(--page-text);\n            --tw-prose-hr: hsla(0,0%,100%,.25);\n            --tw-prose-links: var(--page-text);\n            --tw-prose-quotes: var(--page-text);\n            --meta-title: #959faa;\n        }\n\n        * {\n            box-sizing: border-box;\n            font-size: 16px;\n        }\n\n        ::-webkit-scrollbar {\n            height: 1rem;\n            width: .5rem\n        }\n\n        ::-webkit-scrollbar:horizontal {\n            height: .5rem;\n            width: 1rem\n        }\n\n        ::-webkit-scrollbar-track {\n            background-color: transparent;\n            border-radius: 9999px\n        }\n\n        ::-webkit-scrollbar-thumb {\n            --tw-border-opacity: 1;\n            background-color: rgba(217,217,227,.8);\n            border-color: rgba(255,255,255,var(--tw-border-opacity));\n            border-radius: 9999px;\n            border-width: 1px\n        }\n\n        ::-webkit-scrollbar-thumb:hover {\n            --tw-bg-opacity: 1;\n            background-color: rgba(236,236,241,var(--tw-bg-opacity))\n        }\n\n        .dark ::-webkit-scrollbar-thumb {\n            --tw-bg-opacity: 1;\n            background-color: rgba(86,88,105,var(--tw-bg-opacity))\n        }\n\n        .dark ::-webkit-scrollbar-thumb:hover {\n            --tw-bg-opacity: 1;\n            background-color: rgba(172,172,190,var(--tw-bg-opacity))\n        }\n\n        @media (min-width: 768px) {\n            .scrollbar-trigger ::-webkit-scrollbar-thumb {\n                visibility:hidden\n            }\n\n            .scrollbar-trigger:hover ::-webkit-scrollbar-thumb {\n                visibility: visible\n            }\n        }\n\n        body {\n            font-family: Söhne,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif,Helvetica Neue,Arial,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;\n            font-size: 14px;\n            line-height: 1.5;\n            color: var(--page-text);\n            background-color: var(--page-bg);\n            margin: 0;\n            padding: 0;\n        }\n\n        [data-theme=\"light\"] .sun {\n            display: none;\n        }\n\n        [data-theme=\"dark\"] .moon {\n            display: none;\n        }\n\n        .toggle {\n            display: inline-flex;\n            justify-content: center;\n            align-items: center;\n            width: 32px;\n            height: 32px;\n            border-radius: 4px;\n            background-color: #fff;\n            border: 1px solid #e2e8f0;\n        }\n\n        [data-width=\"narrow\"] .width-toggle .expand {\n            display: block;\n        }\n\n        [data-width=\"wide\"] .width-toggle .narrow {\n            display: block;\n        }\n\n        .width-toggle {\n            display: inline-flex;\n            justify-content: center;\n            align-items: center;\n            width: 32px;\n            height: 32px;\n            border-radius: 4px;\n            background-color: #fff;\n            border: 1px solid #e2e8f0;\n            margin-left: 8px;\n            cursor: pointer;\n        }\n\n        .width-toggle svg {\n            display: none;\n        }\n\n        .metadata_container {\n            display: flex;\n            flex-direction: column;\n            margin-top: 8px;\n            padding-left: 1rem;\n        }\n\n        .metadata_item {\n            display: flex;\n            flex-direction: row;\n            align-items: center;\n            border-radius: 16px;\n            padding: 4px 0.5rem;\n        }\n\n        .metadata_item:hover {\n            background-color: rgba(0,0,0,.1);\n        }\n\n        .metadata_item > div:first-child {\n            flex: 0 1 100px;\n            color: var(--meta-title);\n        }\n\n        .metadata_item > div:last-child {\n            flex: 1;\n        }\n\n        a {\n            color: var(--tw-prose-links);\n            font-size: 0.8rem;\n            text-decoration-line: underline;\n            text-underline-offset: 2px;\n        }\n\n        .conversation-content > p:first-child,\n        ol:first-child {\n            margin-top: 0;\n        }\n\n        p>code, li>code {\n            color: var(--tw-prose-code);\n            font-weight: 600;\n            font-size: .875em;\n        }\n\n        p>code::before,\n        p>code::after,\n        li>code::before,\n        li>code::after {\n            content: \"`\";\n        }\n\n        hr {\n            width: 100%;\n            height: 0;\n            border: 1px solid var(--tw-prose-hr);\n            margin-bottom: 1em;\n            margin-top: 1em;\n        }\n\n        pre {\n            color: #ffffff;\n            background-color: #000000;\n            overflow-x: auto;\n            margin: 0 0 1rem 0;\n            border-radius: 0.375rem;\n        }\n\n        pre>code {\n            font-family: Söhne Mono, Monaco, Andale Mono, Ubuntu Mono, monospace !important;\n            font-weight: 400;\n            font-size: .875em;\n            line-height: 1.7142857;\n        }\n\n        h1, h2, h3, h4, h5, h6 {\n            color: var(--tw-prose-headings);\n            margin: 0;\n        }\n\n        h1 {\n            font-size: 2.25em;\n            font-weight: 600;\n            line-height: 1.1111111;\n            margin-bottom: 0.8888889em;\n            margin-top: 0;\n        }\n\n        h2 {\n            font-size: 1.5em;\n            font-weight: 700;\n            line-height: 1.3333333;\n            margin-bottom: 1em;\n            margin-top: 2em;\n        }\n\n        h3 {\n            font-size: 1.25em;\n            font-weight: 600;\n            line-height: 1.6;\n            margin-bottom: .6em;\n            margin-top: 1.6em;\n        }\n\n        h4 {\n            font-weight: 400;\n            line-height: 1.5;\n            margin-bottom: .5em;\n            margin-top: 1.5em\n        }\n\n        h3,h4 {\n            margin-bottom: .5rem;\n            margin-top: 1rem;\n        }\n\n        h5 {\n            font-weight: 600;\n        }\n\n        blockquote {\n            border-left: 2px solid rgba(142,142,160,1);\n            color: var(--tw-prose-quotes);\n            font-style: italic;\n            font-style: normal;\n            font-weight: 500;\n            line-height: 1rem;\n            margin: 1.6em 0;\n            padding-left: 1em;\n            quotes: \"\\201C\"\"\\201D\"\"\\2018\"\"\\2019\";\n        }\n\n        blockquote p:first-of-type:before {\n            content: open-quote;\n        }\n\n        blockquote p:last-of-type:after {\n            content: close-quote;\n        }\n\n        ol, ul {\n            padding-left: 1.1rem;\n        }\n\n        ::marker {\n            color: var(--tw-prose-counters);\n            font-weight: 400;\n        }\n\n        table {\n            width: 100%;\n            border-collapse: separate;\n            border-spacing: 0 0;\n            table-layout: auto;\n            text-align: left;\n            font-size: .875em;\n            line-height: 1.7142857;\n        }\n\n        table * {\n            box-sizing: border-box;\n            border-width: 0;\n            border-style: solid;\n            border-color: #d9d9e3;\n        }\n\n        table thead {\n            border-bottom-color: var(--th-borders);\n            border-bottom-width: 1px;\n        }\n\n        table th {\n            background-color: rgba(236,236,241,.2);\n            border-bottom-width: 1px;\n            border-left-width: 1px;\n            border-top-width: 1px;\n            padding: 0.25rem 0.75rem;\n        }\n\n        table th:first-child {\n            border-top-left-radius: 0.375rem;\n        }\n\n        table th:last-child {\n            border-right-width: 1px;\n            border-top-right-radius: 0.375rem;\n        }\n\n        table tbody tr {\n            border-bottom-color: var(--td-borders);\n            border-bottom-width: 1px;\n        }\n\n        table tbody tr:last-child {\n            border-bottom-width: 0;\n        }\n\n        table tbody tr:last-child td:first-child {\n            border-bottom-left-radius: 0.375rem;\n        }\n\n        table tbody tr:last-child td:last-child {\n            border-bottom-right-radius: 0.375rem;\n        }\n\n        table td {\n            border-bottom-width: 1px;\n            border-left-width: 1px;\n            padding: 0.25rem 0.75rem;\n        }\n\n        table td:last-child {\n            border-right-width: 1px;\n        }\n\n        [type=checkbox], [type=radio] {\n            accent-color: #2563eb;\n        }\n\n        .conversation {\n            margin: 0 auto;\n            padding: 1rem;\n            max-width: 64rem;\n        }\n\n        [data-width=\"narrow\"] .conversation {\n            max-width: 64rem;\n        }\n\n        [data-width=\"wide\"] .conversation {\n            max-width: 90%;\n        }\n\n        @media (min-width: 1280px) {\n            .conversation {\n                max-width: 48rem;\n            }\n        }\n\n        @media (min-width: 1024px) {\n            .conversation {\n                max-width: 40rem;\n            }\n        }\n\n        @media (min-width: 768px) {\n            .conversation {\n                max-width: 48rem;\n            }\n        }\n\n        .conversation-header {\n            margin-bottom: 1rem;\n        }\n\n        .conversation-header h1 {\n            margin: 0;\n        }\n\n        .conversation-header h1 a {\n            font-size: 1.5rem;\n        }\n\n        .conversation-header .conversation-export {\n            margin-top: 0.5rem;\n            font-size: 0.8rem;\n        }\n\n        .conversation-header p {\n            margin-top: 0.5rem;\n            font-size: 0.8rem;\n        }\n\n        .conversation-item {\n            display: flex;\n            position: relative;\n            padding: 1rem;\n            border-left: 1px solid rgba(0,0,0,.1);\n            border-right: 1px solid rgba(0,0,0,.1);\n            border-bottom: 1px solid rgba(0,0,0,.1);\n        }\n\n        .conversation-item:first-of-type {\n            border-top: 1px solid rgba(0,0,0,.1);\n        }\n\n        .author {\n            display: flex;\n            flex: 0 0 30px;\n            justify-content: center;\n            align-items: center;\n            width: 30px;\n            height: 30px;\n            border-radius: 0.125rem;\n            margin-right: 1rem;\n            overflow: hidden;\n        }\n\n        .author svg {\n            color: #fff;\n            width: 22px;\n            height: 22px;\n        }\n\n        .author img {\n            content: url({{avatar}});\n            width: 100%;\n            height: 100%;\n        }\n\n        .author.assistant {\n            background-color: rgb(16, 163, 127);\n        }\n\n        .conversation-content-wrapper {\n            display: flex;\n            position: relative;\n            overflow: hidden;\n            flex: 1 1 auto;\n            flex-direction: column;\n        }\n\n        .thinking {\n            font-size: 0.875rem;\n            line-height: 1.5;\n            margin-bottom: 0.75rem;\n            border: 1px solid #d1d5db;\n            border-radius: 0.5rem;\n            padding: 0.5rem 0.75rem;\n        }\n\n        .thinking summary {\n            cursor: pointer;\n            font-weight: 500;\n            color: #6b7280;\n        }\n\n        .thinking p {\n            margin: 0.5rem 0;\n            color: #6b7280;\n        }\n\n        .dark .thinking {\n            border-color: #4b5563;\n        }\n\n        .dark .thinking summary,\n        .dark .thinking p {\n            color: #9ca3af;\n        }\n\n        .conversation-content {\n            font-size: 1rem;\n            line-height: 1.5;\n        }\n\n        .conversation-content p {\n            white-space: pre-wrap;\n            line-height: 28px;\n        }\n\n        .conversation-content img, .conversation-content video {\n            display: block;\n            max-width: 100%;\n            height: auto;\n            margin-bottom: 2em;\n            margin-top: 2em;\n        }\n\n        .time {\n            position: absolute;\n            right: 8px;\n            bottom: 0;\n            font-size: 0.8rem;\n            color: #acacbe\n        }\n\n    </style>\n</head>\n\n<body>\n    <svg aria-hidden=\"true\" style=\"position: absolute; width: 0; height: 0; overflow: hidden;\" version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n        <symbol id=\"chatgpt\" viewBox=\"0 0 41 41\">\n            <path d=\"M37.5324 16.8707C37.9808 15.5241 38.1363 14.0974 37.9886 12.6859C37.8409 11.2744 37.3934 9.91076 36.676 8.68622C35.6126 6.83404 33.9882 5.3676 32.0373 4.4985C30.0864 3.62941 27.9098 3.40259 25.8215 3.85078C24.8796 2.7893 23.7219 1.94125 22.4257 1.36341C21.1295 0.785575 19.7249 0.491269 18.3058 0.500197C16.1708 0.495044 14.0893 1.16803 12.3614 2.42214C10.6335 3.67624 9.34853 5.44666 8.6917 7.47815C7.30085 7.76286 5.98686 8.3414 4.8377 9.17505C3.68854 10.0087 2.73073 11.0782 2.02839 12.312C0.956464 14.1591 0.498905 16.2988 0.721698 18.4228C0.944492 20.5467 1.83612 22.5449 3.268 24.1293C2.81966 25.4759 2.66413 26.9026 2.81182 28.3141C2.95951 29.7256 3.40701 31.0892 4.12437 32.3138C5.18791 34.1659 6.8123 35.6322 8.76321 36.5013C10.7141 37.3704 12.8907 37.5973 14.9789 37.1492C15.9208 38.2107 17.0786 39.0587 18.3747 39.6366C19.6709 40.2144 21.0755 40.5087 22.4946 40.4998C24.6307 40.5054 26.7133 39.8321 28.4418 38.5772C30.1704 37.3223 31.4556 35.5506 32.1119 33.5179C33.5027 33.2332 34.8167 32.6547 35.9659 31.821C37.115 30.9874 38.0728 29.9178 38.7752 28.684C39.8458 26.8371 40.3023 24.6979 40.0789 22.5748C39.8556 20.4517 38.9639 18.4544 37.5324 16.8707ZM22.4978 37.8849C20.7443 37.8874 19.0459 37.2733 17.6994 36.1501C17.7601 36.117 17.8666 36.0586 17.936 36.0161L25.9004 31.4156C26.1003 31.3019 26.2663 31.137 26.3813 30.9378C26.4964 30.7386 26.5563 30.5124 26.5549 30.2825V19.0542L29.9213 20.998C29.9389 21.0068 29.9541 21.0198 29.9656 21.0359C29.977 21.052 29.9842 21.0707 29.9867 21.0902V30.3889C29.9842 32.375 29.1946 34.2791 27.7909 35.6841C26.3872 37.0892 24.4838 37.8806 22.4978 37.8849ZM6.39227 31.0064C5.51397 29.4888 5.19742 27.7107 5.49804 25.9832C5.55718 26.0187 5.66048 26.0818 5.73461 26.1244L13.699 30.7248C13.8975 30.8408 14.1233 30.902 14.3532 30.902C14.583 30.902 14.8088 30.8408 15.0073 30.7248L24.731 25.1103V28.9979C24.7321 29.0177 24.7283 29.0376 24.7199 29.0556C24.7115 29.0736 24.6988 29.0893 24.6829 29.1012L16.6317 33.7497C14.9096 34.7416 12.8643 35.0097 10.9447 34.4954C9.02506 33.9811 7.38785 32.7263 6.39227 31.0064ZM4.29707 13.6194C5.17156 12.0998 6.55279 10.9364 8.19885 10.3327C8.19885 10.4013 8.19491 10.5228 8.19491 10.6071V19.808C8.19351 20.0378 8.25334 20.2638 8.36823 20.4629C8.48312 20.6619 8.64893 20.8267 8.84863 20.9404L18.5723 26.5542L15.206 28.4979C15.1894 28.5089 15.1703 28.5155 15.1505 28.5173C15.1307 28.5191 15.1107 28.516 15.0924 28.5082L7.04046 23.8557C5.32135 22.8601 4.06716 21.2235 3.55289 19.3046C3.03862 17.3858 3.30624 15.3413 4.29707 13.6194ZM31.955 20.0556L22.2312 14.4411L25.5976 12.4981C25.6142 12.4872 25.6333 12.4805 25.6531 12.4787C25.6729 12.4769 25.6928 12.4801 25.7111 12.4879L33.7631 17.1364C34.9967 17.849 36.0017 18.8982 36.6606 20.1613C37.3194 21.4244 37.6047 22.849 37.4832 24.2684C37.3617 25.6878 36.8382 27.0432 35.9743 28.1759C35.1103 29.3086 33.9415 30.1717 32.6047 30.6641C32.6047 30.5947 32.6047 30.4733 32.6047 30.3889V21.188C32.6066 20.9586 32.5474 20.7328 32.4332 20.5338C32.319 20.3348 32.154 20.1698 31.955 20.0556ZM35.3055 15.0128C35.2464 14.9765 35.1431 14.9142 35.069 14.8717L27.1045 10.2712C26.906 10.1554 26.6803 10.0943 26.4504 10.0943C26.2206 10.0943 25.9948 10.1554 25.7963 10.2712L16.0726 15.8858V11.9982C16.0715 11.9783 16.0753 11.9585 16.0837 11.9405C16.0921 11.9225 16.1048 11.9068 16.1207 11.8949L24.1719 7.25025C25.4053 6.53903 26.8158 6.19376 28.2383 6.25482C29.6608 6.31589 31.0364 6.78077 32.2044 7.59508C33.3723 8.40939 34.2842 9.53945 34.8334 10.8531C35.3826 12.1667 35.5464 13.6095 35.3055 15.0128ZM14.2424 21.9419L10.8752 19.9981C10.8576 19.9893 10.8423 19.9763 10.8309 19.9602C10.8195 19.9441 10.8122 19.9254 10.8098 19.9058V10.6071C10.8107 9.18295 11.2173 7.78848 11.9819 6.58696C12.7466 5.38544 13.8377 4.42659 15.1275 3.82264C16.4173 3.21869 17.8524 2.99464 19.2649 3.1767C20.6775 3.35876 22.0089 3.93941 23.1034 4.85067C23.0427 4.88379 22.937 4.94215 22.8668 4.98473L14.9024 9.58517C14.7025 9.69878 14.5366 9.86356 14.4215 10.0626C14.3065 10.2616 14.2466 10.4877 14.2479 10.7175L14.2424 21.9419ZM16.071 17.9991L20.4018 15.4978L24.7325 17.9975V22.9985L20.4018 25.4983L16.071 22.9985V17.9991Z\" fill=\"currentColor\"></path>\n        </symbol>\n    </svg>\n    <div class=\"conversation\">\n        <div class=\"conversation-header\">\n            <h1>\n                <a href=\"{{source}}\" target=\"_blank\" rel=\"noopener noreferrer\">{{title}}</a>\n                <button class=\"toggle\">\n                    <svg class=\"sun\" stroke=\"currentColor\" fill=\"none\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"w-4 h-4\" height=\"1em\" width=\"1em\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"12\" cy=\"12\" r=\"5\"></circle><line x1=\"12\" y1=\"1\" x2=\"12\" y2=\"3\"></line><line x1=\"12\" y1=\"21\" x2=\"12\" y2=\"23\"></line><line x1=\"4.22\" y1=\"4.22\" x2=\"5.64\" y2=\"5.64\"></line><line x1=\"18.36\" y1=\"18.36\" x2=\"19.78\" y2=\"19.78\"></line><line x1=\"1\" y1=\"12\" x2=\"3\" y2=\"12\"></line><line x1=\"21\" y1=\"12\" x2=\"23\" y2=\"12\"></line><line x1=\"4.22\" y1=\"19.78\" x2=\"5.64\" y2=\"18.36\"></line><line x1=\"18.36\" y1=\"5.64\" x2=\"19.78\" y2=\"4.22\"></line></svg>\n                    <svg class=\"moon\" stroke=\"currentColor\" fill=\"none\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"w-4 h-4\" height=\"1em\" width=\"1em\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z\"></path></svg>\n                </button>\n                <button class=\"toggle width-toggle\">\n                    <svg class=\"expand\" stroke=\"currentColor\" fill=\"none\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"w-4 h-4\" height=\"1em\" width=\"1em\" xmlns=\"http://www.w3.org/2000/svg\" style=\"display: block;\">\n                        <path d=\"M3 12h18M6 8l-4 4 4 4M18 8l4 4-4 4\"></path>\n                    </svg>\n                    <svg class=\"narrow\" stroke=\"currentColor\" fill=\"none\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"w-4 h-4\" height=\"1em\" width=\"1em\" xmlns=\"http://www.w3.org/2000/svg\" style=\"display: none;\">\n                        <path d=\"M3 12h7M14 12h7M6 16l4-4-4-4M18 16l-4-4 4-4\"></path>\n                    </svg>\n                </button>\n            </h1>\n            <div class=\"conversation-export\">\n                <p>Exported by\n                <a href=\"https://github.com/pionxzh/chatgpt-exporter.git\">ChatGPT Exporter</a>\n                at {{time}}</p>\n            </div>\n            {{details}}\n        </div>\n\n        {{content}}\n    </div>\n\n\n    <script>\n        function toggleDarkMode(mode) {\n            const html = document.querySelector('html');\n            const isDarkMode = html.getAttribute('data-theme') === 'dark';\n            const newMode = mode || (isDarkMode ? 'light' : 'dark');\n            if (newMode !== 'dark' && newMode !== 'light') return;\n            html.setAttribute('data-theme', newMode);\n\n            const url = new URL(window.location);\n            url.searchParams.set('theme', newMode);\n            window.history.replaceState({}, '', url);\n        }\n        function toggleWidthMode(mode) {\n            const body = document.querySelector('body');\n            const widthToggleButton = document.querySelector('.width-toggle');\n            const isWide = body.getAttribute('data-width') === 'wide';\n            const newWidthMode = mode || (isWide ? 'narrow' : 'wide');\n            if (newWidthMode !== 'narrow' && newWidthMode !== 'wide') return;\n            body.setAttribute('data-width', newWidthMode);\n\n            const url = new URL(window.location);\n            url.searchParams.set('width', newWidthMode);\n            window.history.replaceState({}, '', url);\n\n            // Update the icon based on the current mode\n            const narrowIcon = widthToggleButton.querySelector('.narrow');\n            const expandIcon = widthToggleButton.querySelector('.expand');\n\n            if (newWidthMode === 'wide') {\n                expandIcon.style.display = \"none\";\n                narrowIcon.style.display = \"block\";\n            } else {\n                expandIcon.style.display = \"block\";\n                narrowIcon.style.display = \"none\";\n            }\n        }\n\n        const urlParams = new URLSearchParams(window.location.search);\n        const theme = urlParams.get('theme');\n        const width = urlParams.get('width');\n\n        if (theme) toggleDarkMode(theme);\n        if (width) toggleWidthMode(width);\n\n        document.querySelector('.toggle').addEventListener('click', () => toggleDarkMode());\n        document.querySelector('.width-toggle').addEventListener('click', () => toggleWidthMode());\n    <\/script>\n</body>\n\n</html>\n";
+	var template_default = "<!DOCTYPE html>\n<html lang=\"{{lang}}\" data-theme=\"{{theme}}\">\n<head>\n    <meta charset=\"UTF-8\" />\n    <link rel=\"icon\" href=\"https://chat.openai.com/favicon.ico\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>{{title}}</title>\n    <link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css\">\n    <script src=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js\"><\/script>\n    <script>\n        hljs.highlightAll()\n    <\/script>\n    <link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.3/katex.min.css\">\n    <script src=\"https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.3/katex.min.js\"><\/script>\n    <script src=\"https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.3/contrib/auto-render.min.js\"><\/script>\n    <script>\n        document.addEventListener(\"DOMContentLoaded\", function() {\n            renderMathInElement(document.body, {\n                delimiters: [\n                    { left: \"\\\\[\", right: \"\\\\]\", display: true },\n                    { left: \"\\\\(\", right: \"\\\\)\", display: false }\n                ],\n                throwOnError: false,\n                ignoredClasses: [\"no-katex\"]\n            });\n        });\n    <\/script>\n\n    <style>\n        :root {\n            --page-text: #0d0d0d;\n            --page-bg: #fff;\n            --td-borders: #374151;\n            --th-borders: #4b5563;\n            --tw-prose-code: var(--page-text);\n            --tw-prose-counters: #9b9b9b;\n            --tw-prose-headings: var(--page-text);\n            --tw-prose-hr: rgba(0,0,0,.25);\n            --tw-prose-links: var(--page-text);\n            --tw-prose-quotes: var(--page-text);\n            --meta-title: #616c77;\n        }\n\n        [data-theme=\"dark\"] {\n            --page-text: #ececec;\n            --page-bg: #212121;\n            --tw-prose-code: var(--page-text);\n            --tw-prose-counters: #9b9b9b;\n            --tw-prose-headings: var(--page-text);\n            --tw-prose-hr: hsla(0,0%,100%,.25);\n            --tw-prose-links: var(--page-text);\n            --tw-prose-quotes: var(--page-text);\n            --meta-title: #959faa;\n        }\n\n        * {\n            box-sizing: border-box;\n            font-size: 16px;\n        }\n\n        ::-webkit-scrollbar {\n            height: 1rem;\n            width: .5rem\n        }\n\n        ::-webkit-scrollbar:horizontal {\n            height: .5rem;\n            width: 1rem\n        }\n\n        ::-webkit-scrollbar-track {\n            background-color: transparent;\n            border-radius: 9999px\n        }\n\n        ::-webkit-scrollbar-thumb {\n            --tw-border-opacity: 1;\n            background-color: rgba(217,217,227,.8);\n            border-color: rgba(255,255,255,var(--tw-border-opacity));\n            border-radius: 9999px;\n            border-width: 1px\n        }\n\n        ::-webkit-scrollbar-thumb:hover {\n            --tw-bg-opacity: 1;\n            background-color: rgba(236,236,241,var(--tw-bg-opacity))\n        }\n\n        [data-theme=\"dark\"] ::-webkit-scrollbar-thumb {\n            --tw-bg-opacity: 1;\n            background-color: rgba(86,88,105,var(--tw-bg-opacity))\n        }\n\n        [data-theme=\"dark\"] ::-webkit-scrollbar-thumb:hover {\n            --tw-bg-opacity: 1;\n            background-color: rgba(172,172,190,var(--tw-bg-opacity))\n        }\n\n        @media (min-width: 768px) {\n            .scrollbar-trigger ::-webkit-scrollbar-thumb {\n                visibility:hidden\n            }\n\n            .scrollbar-trigger:hover ::-webkit-scrollbar-thumb {\n                visibility: visible\n            }\n        }\n\n        body {\n            font-family: Söhne,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif,Helvetica Neue,Arial,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;\n            font-size: 14px;\n            line-height: 1.5;\n            color: var(--page-text);\n            background-color: var(--page-bg);\n            margin: 0;\n            padding: 0;\n        }\n\n        [data-theme=\"light\"] .sun {\n            display: none;\n        }\n\n        [data-theme=\"dark\"] .moon {\n            display: none;\n        }\n\n        .toggle {\n            display: inline-flex;\n            justify-content: center;\n            align-items: center;\n            width: 32px;\n            height: 32px;\n            border-radius: 4px;\n            background-color: #fff;\n            border: 1px solid #e2e8f0;\n        }\n\n        [data-width=\"narrow\"] .width-toggle .expand {\n            display: block;\n        }\n\n        [data-width=\"wide\"] .width-toggle .narrow {\n            display: block;\n        }\n\n        .width-toggle {\n            display: inline-flex;\n            justify-content: center;\n            align-items: center;\n            width: 32px;\n            height: 32px;\n            border-radius: 4px;\n            background-color: #fff;\n            border: 1px solid #e2e8f0;\n            margin-left: 8px;\n            cursor: pointer;\n        }\n\n        .width-toggle svg {\n            display: none;\n        }\n\n        .metadata_container {\n            display: flex;\n            flex-direction: column;\n            margin-top: 8px;\n            padding-left: 1rem;\n        }\n\n        .metadata_item {\n            display: flex;\n            flex-direction: row;\n            align-items: center;\n            border-radius: 16px;\n            padding: 4px 0.5rem;\n        }\n\n        .metadata_item:hover {\n            background-color: rgba(0,0,0,.1);\n        }\n\n        .metadata_item > div:first-child {\n            flex: 0 1 100px;\n            color: var(--meta-title);\n        }\n\n        .metadata_item > div:last-child {\n            flex: 1;\n        }\n\n        a {\n            color: var(--tw-prose-links);\n            font-size: 0.8rem;\n            text-decoration-line: underline;\n            text-underline-offset: 2px;\n        }\n\n        .conversation-content > p:first-child,\n        ol:first-child {\n            margin-top: 0;\n        }\n\n        :not(pre)>code {\n            color: var(--tw-prose-code);\n            font-family: ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, monospace;\n            font-size: .92em;\n            background-color: rgba(0, 0, 0, .09);\n            border-radius: 6px;\n            padding: 1px 6px;\n        }\n\n        [data-theme=\"dark\"] :not(pre)>code {\n            background-color: rgba(255, 255, 255, .1);\n        }\n\n        hr {\n            width: 100%;\n            height: 0;\n            border: 1px solid var(--tw-prose-hr);\n            margin-bottom: 1em;\n            margin-top: 1em;\n        }\n\n        pre {\n            color: #ffffff;\n            background-color: #000000;\n            overflow-x: auto;\n            margin: 0 0 1rem 0;\n            padding: 1rem;\n            border-radius: 0.375rem;\n        }\n\n        /* The highlight.js theme pads and colors `code.hljs`, but only for languages it knows */\n        pre>code.hljs {\n            padding: 0;\n            background: none;\n        }\n\n        pre>code {\n            font-family: Söhne Mono, Monaco, Andale Mono, Ubuntu Mono, monospace !important;\n            font-weight: 400;\n            font-size: .875em;\n            line-height: 1.7142857;\n        }\n\n        h1, h2, h3, h4, h5, h6 {\n            color: var(--tw-prose-headings);\n            margin: 0;\n        }\n\n        h1 {\n            font-size: 2.25em;\n            font-weight: 600;\n            line-height: 1.1111111;\n            margin-bottom: 0.8888889em;\n            margin-top: 0;\n        }\n\n        h2 {\n            font-size: 1.5em;\n            font-weight: 700;\n            line-height: 1.3333333;\n            margin-bottom: 1em;\n            margin-top: 2em;\n        }\n\n        h3 {\n            font-size: 1.25em;\n            font-weight: 600;\n            line-height: 1.6;\n            margin-bottom: .6em;\n            margin-top: 1.6em;\n        }\n\n        h4 {\n            font-weight: 400;\n            line-height: 1.5;\n            margin-bottom: .5em;\n            margin-top: 1.5em\n        }\n\n        h3,h4 {\n            margin-bottom: .5rem;\n            margin-top: 1rem;\n        }\n\n        h5 {\n            font-weight: 600;\n        }\n\n        blockquote {\n            border-left: 2px solid rgba(142,142,160,1);\n            color: var(--tw-prose-quotes);\n            font-style: italic;\n            font-style: normal;\n            font-weight: 500;\n            line-height: 1rem;\n            margin: 1.6em 0;\n            padding-left: 1em;\n            quotes: \"\\201C\"\"\\201D\"\"\\2018\"\"\\2019\";\n        }\n\n        blockquote p:first-of-type:before {\n            content: open-quote;\n        }\n\n        blockquote p:last-of-type:after {\n            content: close-quote;\n        }\n\n        ol, ul {\n            padding-left: 1.1rem;\n        }\n\n        ::marker {\n            color: var(--tw-prose-counters);\n            font-weight: 400;\n        }\n\n        table {\n            width: 100%;\n            border-collapse: separate;\n            border-spacing: 0 0;\n            table-layout: auto;\n            text-align: left;\n            font-size: .875em;\n            line-height: 1.7142857;\n        }\n\n        table * {\n            box-sizing: border-box;\n            border-width: 0;\n            border-style: solid;\n            border-color: #d9d9e3;\n        }\n\n        table thead {\n            border-bottom-color: var(--th-borders);\n            border-bottom-width: 1px;\n        }\n\n        table th {\n            background-color: rgba(236,236,241,.2);\n            border-bottom-width: 1px;\n            border-left-width: 1px;\n            border-top-width: 1px;\n            padding: 0.25rem 0.75rem;\n        }\n\n        table th:first-child {\n            border-top-left-radius: 0.375rem;\n        }\n\n        table th:last-child {\n            border-right-width: 1px;\n            border-top-right-radius: 0.375rem;\n        }\n\n        table tbody tr {\n            border-bottom-color: var(--td-borders);\n            border-bottom-width: 1px;\n        }\n\n        table tbody tr:last-child {\n            border-bottom-width: 0;\n        }\n\n        table tbody tr:last-child td:first-child {\n            border-bottom-left-radius: 0.375rem;\n        }\n\n        table tbody tr:last-child td:last-child {\n            border-bottom-right-radius: 0.375rem;\n        }\n\n        table td {\n            border-bottom-width: 1px;\n            border-left-width: 1px;\n            padding: 0.25rem 0.75rem;\n        }\n\n        table td:last-child {\n            border-right-width: 1px;\n        }\n\n        [type=checkbox], [type=radio] {\n            accent-color: #2563eb;\n        }\n\n        .conversation {\n            margin: 0 auto;\n            padding: 1rem;\n            max-width: 64rem;\n        }\n\n        [data-width=\"narrow\"] .conversation {\n            max-width: 64rem;\n        }\n\n        [data-width=\"wide\"] .conversation {\n            max-width: 90%;\n        }\n\n        @media (min-width: 1280px) {\n            .conversation {\n                max-width: 48rem;\n            }\n        }\n\n        @media (min-width: 1024px) {\n            .conversation {\n                max-width: 40rem;\n            }\n        }\n\n        @media (min-width: 768px) {\n            .conversation {\n                max-width: 48rem;\n            }\n        }\n\n        .conversation-header {\n            margin-bottom: 1rem;\n        }\n\n        .conversation-header h1 {\n            margin: 0;\n        }\n\n        .conversation-header h1 a {\n            font-size: 1.5rem;\n        }\n\n        .conversation-header .conversation-export {\n            margin-top: 0.5rem;\n            font-size: 0.8rem;\n        }\n\n        .conversation-header p {\n            margin-top: 0.5rem;\n            font-size: 0.8rem;\n        }\n\n        .conversation-item {\n            display: flex;\n            position: relative;\n            padding: 1rem;\n            border-left: 1px solid rgba(0,0,0,.1);\n            border-right: 1px solid rgba(0,0,0,.1);\n            border-bottom: 1px solid rgba(0,0,0,.1);\n        }\n\n        .conversation-item:first-of-type {\n            border-top: 1px solid rgba(0,0,0,.1);\n        }\n\n        .author {\n            display: flex;\n            flex: 0 0 30px;\n            justify-content: center;\n            align-items: center;\n            width: 30px;\n            height: 30px;\n            border-radius: 0.125rem;\n            margin-right: 1rem;\n            overflow: hidden;\n        }\n\n        .author svg {\n            color: #fff;\n            width: 22px;\n            height: 22px;\n        }\n\n        .author img {\n            content: url({{avatar}});\n            width: 100%;\n            height: 100%;\n        }\n\n        .author.assistant {\n            background-color: rgb(16, 163, 127);\n        }\n\n        .conversation-content-wrapper {\n            display: flex;\n            position: relative;\n            overflow: hidden;\n            flex: 1 1 auto;\n            flex-direction: column;\n        }\n\n        .thinking {\n            font-size: 0.875rem;\n            line-height: 1.5;\n            margin-bottom: 0.75rem;\n            border: 1px solid #d1d5db;\n            border-radius: 0.5rem;\n            padding: 0.5rem 0.75rem;\n        }\n\n        .thinking summary {\n            cursor: pointer;\n            font-weight: 500;\n            color: #6b7280;\n        }\n\n        .thinking p {\n            margin: 0.5rem 0;\n            color: #6b7280;\n        }\n\n        [data-theme=\"dark\"] .thinking {\n            border-color: #4b5563;\n        }\n\n        [data-theme=\"dark\"] .thinking summary,\n        [data-theme=\"dark\"] .thinking p {\n            color: #9ca3af;\n        }\n\n        .conversation-content {\n            font-size: 1rem;\n            line-height: 1.5;\n        }\n\n        .conversation-content p {\n            white-space: pre-wrap;\n            line-height: 28px;\n        }\n\n        .conversation-content img, .conversation-content video {\n            display: block;\n            max-width: 100%;\n            height: auto;\n            margin-bottom: 2em;\n            margin-top: 2em;\n        }\n\n        .attachments {\n            list-style: none;\n            margin: 0.5rem 0 0;\n            padding: 0;\n            font-size: 0.875rem;\n            color: #6b7280;\n        }\n\n        [data-theme=\"dark\"] .attachments {\n            color: #9ca3af;\n        }\n\n        .time {\n            position: absolute;\n            right: 8px;\n            bottom: 0;\n            font-size: 0.8rem;\n            color: #acacbe\n        }\n\n    </style>\n</head>\n\n<body>\n    <svg aria-hidden=\"true\" style=\"position: absolute; width: 0; height: 0; overflow: hidden;\" version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n        <symbol id=\"chatgpt\" viewBox=\"0 0 41 41\">\n            <path d=\"M37.5324 16.8707C37.9808 15.5241 38.1363 14.0974 37.9886 12.6859C37.8409 11.2744 37.3934 9.91076 36.676 8.68622C35.6126 6.83404 33.9882 5.3676 32.0373 4.4985C30.0864 3.62941 27.9098 3.40259 25.8215 3.85078C24.8796 2.7893 23.7219 1.94125 22.4257 1.36341C21.1295 0.785575 19.7249 0.491269 18.3058 0.500197C16.1708 0.495044 14.0893 1.16803 12.3614 2.42214C10.6335 3.67624 9.34853 5.44666 8.6917 7.47815C7.30085 7.76286 5.98686 8.3414 4.8377 9.17505C3.68854 10.0087 2.73073 11.0782 2.02839 12.312C0.956464 14.1591 0.498905 16.2988 0.721698 18.4228C0.944492 20.5467 1.83612 22.5449 3.268 24.1293C2.81966 25.4759 2.66413 26.9026 2.81182 28.3141C2.95951 29.7256 3.40701 31.0892 4.12437 32.3138C5.18791 34.1659 6.8123 35.6322 8.76321 36.5013C10.7141 37.3704 12.8907 37.5973 14.9789 37.1492C15.9208 38.2107 17.0786 39.0587 18.3747 39.6366C19.6709 40.2144 21.0755 40.5087 22.4946 40.4998C24.6307 40.5054 26.7133 39.8321 28.4418 38.5772C30.1704 37.3223 31.4556 35.5506 32.1119 33.5179C33.5027 33.2332 34.8167 32.6547 35.9659 31.821C37.115 30.9874 38.0728 29.9178 38.7752 28.684C39.8458 26.8371 40.3023 24.6979 40.0789 22.5748C39.8556 20.4517 38.9639 18.4544 37.5324 16.8707ZM22.4978 37.8849C20.7443 37.8874 19.0459 37.2733 17.6994 36.1501C17.7601 36.117 17.8666 36.0586 17.936 36.0161L25.9004 31.4156C26.1003 31.3019 26.2663 31.137 26.3813 30.9378C26.4964 30.7386 26.5563 30.5124 26.5549 30.2825V19.0542L29.9213 20.998C29.9389 21.0068 29.9541 21.0198 29.9656 21.0359C29.977 21.052 29.9842 21.0707 29.9867 21.0902V30.3889C29.9842 32.375 29.1946 34.2791 27.7909 35.6841C26.3872 37.0892 24.4838 37.8806 22.4978 37.8849ZM6.39227 31.0064C5.51397 29.4888 5.19742 27.7107 5.49804 25.9832C5.55718 26.0187 5.66048 26.0818 5.73461 26.1244L13.699 30.7248C13.8975 30.8408 14.1233 30.902 14.3532 30.902C14.583 30.902 14.8088 30.8408 15.0073 30.7248L24.731 25.1103V28.9979C24.7321 29.0177 24.7283 29.0376 24.7199 29.0556C24.7115 29.0736 24.6988 29.0893 24.6829 29.1012L16.6317 33.7497C14.9096 34.7416 12.8643 35.0097 10.9447 34.4954C9.02506 33.9811 7.38785 32.7263 6.39227 31.0064ZM4.29707 13.6194C5.17156 12.0998 6.55279 10.9364 8.19885 10.3327C8.19885 10.4013 8.19491 10.5228 8.19491 10.6071V19.808C8.19351 20.0378 8.25334 20.2638 8.36823 20.4629C8.48312 20.6619 8.64893 20.8267 8.84863 20.9404L18.5723 26.5542L15.206 28.4979C15.1894 28.5089 15.1703 28.5155 15.1505 28.5173C15.1307 28.5191 15.1107 28.516 15.0924 28.5082L7.04046 23.8557C5.32135 22.8601 4.06716 21.2235 3.55289 19.3046C3.03862 17.3858 3.30624 15.3413 4.29707 13.6194ZM31.955 20.0556L22.2312 14.4411L25.5976 12.4981C25.6142 12.4872 25.6333 12.4805 25.6531 12.4787C25.6729 12.4769 25.6928 12.4801 25.7111 12.4879L33.7631 17.1364C34.9967 17.849 36.0017 18.8982 36.6606 20.1613C37.3194 21.4244 37.6047 22.849 37.4832 24.2684C37.3617 25.6878 36.8382 27.0432 35.9743 28.1759C35.1103 29.3086 33.9415 30.1717 32.6047 30.6641C32.6047 30.5947 32.6047 30.4733 32.6047 30.3889V21.188C32.6066 20.9586 32.5474 20.7328 32.4332 20.5338C32.319 20.3348 32.154 20.1698 31.955 20.0556ZM35.3055 15.0128C35.2464 14.9765 35.1431 14.9142 35.069 14.8717L27.1045 10.2712C26.906 10.1554 26.6803 10.0943 26.4504 10.0943C26.2206 10.0943 25.9948 10.1554 25.7963 10.2712L16.0726 15.8858V11.9982C16.0715 11.9783 16.0753 11.9585 16.0837 11.9405C16.0921 11.9225 16.1048 11.9068 16.1207 11.8949L24.1719 7.25025C25.4053 6.53903 26.8158 6.19376 28.2383 6.25482C29.6608 6.31589 31.0364 6.78077 32.2044 7.59508C33.3723 8.40939 34.2842 9.53945 34.8334 10.8531C35.3826 12.1667 35.5464 13.6095 35.3055 15.0128ZM14.2424 21.9419L10.8752 19.9981C10.8576 19.9893 10.8423 19.9763 10.8309 19.9602C10.8195 19.9441 10.8122 19.9254 10.8098 19.9058V10.6071C10.8107 9.18295 11.2173 7.78848 11.9819 6.58696C12.7466 5.38544 13.8377 4.42659 15.1275 3.82264C16.4173 3.21869 17.8524 2.99464 19.2649 3.1767C20.6775 3.35876 22.0089 3.93941 23.1034 4.85067C23.0427 4.88379 22.937 4.94215 22.8668 4.98473L14.9024 9.58517C14.7025 9.69878 14.5366 9.86356 14.4215 10.0626C14.3065 10.2616 14.2466 10.4877 14.2479 10.7175L14.2424 21.9419ZM16.071 17.9991L20.4018 15.4978L24.7325 17.9975V22.9985L20.4018 25.4983L16.071 22.9985V17.9991Z\" fill=\"currentColor\"></path>\n        </symbol>\n    </svg>\n    <div class=\"conversation\">\n        <div class=\"conversation-header\">\n            <h1>\n                <a href=\"{{source}}\" target=\"_blank\" rel=\"noopener noreferrer\">{{title}}</a>\n                <button class=\"toggle\">\n                    <svg class=\"sun\" stroke=\"currentColor\" fill=\"none\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"w-4 h-4\" height=\"1em\" width=\"1em\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"12\" cy=\"12\" r=\"5\"></circle><line x1=\"12\" y1=\"1\" x2=\"12\" y2=\"3\"></line><line x1=\"12\" y1=\"21\" x2=\"12\" y2=\"23\"></line><line x1=\"4.22\" y1=\"4.22\" x2=\"5.64\" y2=\"5.64\"></line><line x1=\"18.36\" y1=\"18.36\" x2=\"19.78\" y2=\"19.78\"></line><line x1=\"1\" y1=\"12\" x2=\"3\" y2=\"12\"></line><line x1=\"21\" y1=\"12\" x2=\"23\" y2=\"12\"></line><line x1=\"4.22\" y1=\"19.78\" x2=\"5.64\" y2=\"18.36\"></line><line x1=\"18.36\" y1=\"5.64\" x2=\"19.78\" y2=\"4.22\"></line></svg>\n                    <svg class=\"moon\" stroke=\"currentColor\" fill=\"none\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"w-4 h-4\" height=\"1em\" width=\"1em\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z\"></path></svg>\n                </button>\n                <button class=\"toggle width-toggle\">\n                    <svg class=\"expand\" stroke=\"currentColor\" fill=\"none\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"w-4 h-4\" height=\"1em\" width=\"1em\" xmlns=\"http://www.w3.org/2000/svg\" style=\"display: block;\">\n                        <path d=\"M3 12h18M6 8l-4 4 4 4M18 8l4 4-4 4\"></path>\n                    </svg>\n                    <svg class=\"narrow\" stroke=\"currentColor\" fill=\"none\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"w-4 h-4\" height=\"1em\" width=\"1em\" xmlns=\"http://www.w3.org/2000/svg\" style=\"display: none;\">\n                        <path d=\"M3 12h7M14 12h7M6 16l4-4-4-4M18 16l-4-4 4-4\"></path>\n                    </svg>\n                </button>\n            </h1>\n            <div class=\"conversation-export\">\n                <p>Exported by\n                <a href=\"https://github.com/pionxzh/chatgpt-exporter.git\">ChatGPT Exporter</a>\n                at {{time}}</p>\n            </div>\n            {{details}}\n        </div>\n\n        {{content}}\n    </div>\n\n\n    <script>\n        function toggleDarkMode(mode) {\n            const html = document.querySelector('html');\n            const isDarkMode = html.getAttribute('data-theme') === 'dark';\n            const newMode = mode || (isDarkMode ? 'light' : 'dark');\n            if (newMode !== 'dark' && newMode !== 'light') return;\n            html.setAttribute('data-theme', newMode);\n\n            const url = new URL(window.location);\n            url.searchParams.set('theme', newMode);\n            window.history.replaceState({}, '', url);\n        }\n        function toggleWidthMode(mode) {\n            const body = document.querySelector('body');\n            const widthToggleButton = document.querySelector('.width-toggle');\n            const isWide = body.getAttribute('data-width') === 'wide';\n            const newWidthMode = mode || (isWide ? 'narrow' : 'wide');\n            if (newWidthMode !== 'narrow' && newWidthMode !== 'wide') return;\n            body.setAttribute('data-width', newWidthMode);\n\n            const url = new URL(window.location);\n            url.searchParams.set('width', newWidthMode);\n            window.history.replaceState({}, '', url);\n\n            // Update the icon based on the current mode\n            const narrowIcon = widthToggleButton.querySelector('.narrow');\n            const expandIcon = widthToggleButton.querySelector('.expand');\n\n            if (newWidthMode === 'wide') {\n                expandIcon.style.display = \"none\";\n                narrowIcon.style.display = \"block\";\n            } else {\n                expandIcon.style.display = \"block\";\n                narrowIcon.style.display = \"none\";\n            }\n        }\n\n        const urlParams = new URLSearchParams(window.location.search);\n        const theme = urlParams.get('theme');\n        const width = urlParams.get('width');\n\n        if (theme) toggleDarkMode(theme);\n        if (width) toggleWidthMode(width);\n\n        document.querySelector('.toggle').addEventListener('click', () => toggleDarkMode());\n        document.querySelector('.width-toggle').addEventListener('click', () => toggleWidthMode());\n    <\/script>\n</body>\n\n</html>\n";
 	var CitationMarkerRegex = /\uE200cite(?:\uE202[^\uE200\uE201]*)+\uE201/gu;
 	function normalizeCitationText(input) {
 		return input.replaceAll(/[\u00A0\u202F\u2007\u2060]/gu, " ").replaceAll(/[\u2010-\u2015\u2212]/gu, "-").replaceAll(/[\uE203\uE204]/gu, "");
@@ -8897,94 +8852,6 @@
 			return sanitize(output, "");
 		};
 	}))(), 1);
-	var THEME_ATTRIBUTE = "data-ce-theme";
-	var DARK_LUMINANCE_THRESHOLD = .5;
-	function parseColor(value) {
-		const match = value.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,/\s]+([\d.]+))?/i);
-		if (!match) return null;
-		return {
-			r: Number(match[1]),
-			g: Number(match[2]),
-			b: Number(match[3]),
-			a: match[4] === void 0 ? 1 : Number(match[4])
-		};
-	}
-	function relativeLuminance(color) {
-		const channel = (value) => {
-			const c = value / 255;
-			return c <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4;
-		};
-		return .2126 * channel(color.r) + .7152 * channel(color.g) + .0722 * channel(color.b);
-	}
-	function paintedBackground(element) {
-		if (typeof getComputedStyle !== "function") return null;
-		let current = element;
-		while (current) {
-			const color = parseColor(getComputedStyle(current).backgroundColor || "");
-			if (color && color.a > .1) return color;
-			current = current.parentElement;
-		}
-		return null;
-	}
-	function explicitScheme(element) {
-		if (!element) return null;
-		for (const name of [
-			"data-theme",
-			"data-color-scheme",
-			"data-mode"
-		]) {
-			const value = element.getAttribute?.(name)?.toLowerCase();
-			if (value === "dark" || value === "light") return value;
-		}
-		if (element.classList?.contains("dark")) return "dark";
-		if (element.classList?.contains("light")) return "light";
-		return null;
-	}
-	function detectColorScheme(doc = document) {
-		const root = doc.documentElement;
-		const explicit = explicitScheme(root) ?? explicitScheme(doc.body);
-		if (explicit) return explicit;
-		const inline = root?.style?.getPropertyValue("color-scheme")?.trim().toLowerCase();
-		if (inline === "dark" || inline === "light") return inline;
-		const background = paintedBackground(doc.body ?? root);
-		if (background) return relativeLuminance(background) < DARK_LUMINANCE_THRESHOLD ? "dark" : "light";
-		return typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-	}
-	function applyColorScheme(doc = document) {
-		const scheme = detectColorScheme(doc);
-		if (doc.documentElement.getAttribute("data-ce-theme") !== scheme) doc.documentElement.setAttribute(THEME_ATTRIBUTE, scheme);
-		return scheme;
-	}
-	function watchColorScheme(onChange, doc = document) {
-		let current = applyColorScheme(doc);
-		const update = () => {
-			const next = applyColorScheme(doc);
-			if (next === current) return;
-			current = next;
-			onChange?.(next);
-		};
-		const observer = typeof MutationObserver === "undefined" ? null : new MutationObserver(update);
-		if (observer) {
-			const options = {
-				attributes: true,
-				attributeFilter: [
-					"class",
-					"style",
-					"data-theme",
-					"data-color-scheme",
-					"data-mode"
-				]
-			};
-			observer.observe(doc.documentElement, options);
-			if (doc.body) observer.observe(doc.body, options);
-		}
-		const media = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : null;
-		media?.addEventListener?.("change", update);
-		return () => {
-			observer?.disconnect();
-			media?.removeEventListener?.("change", update);
-		};
-	}
 	function noop() {}
 	function nonNullable(x) {
 		return x != null;
@@ -9046,7 +8913,14 @@
 		return new Date().toISOString().replace(/:/g, "-").replace(/\..+/, "");
 	}
 	function getColorScheme() {
-		return detectColorScheme();
+		const root = document.documentElement;
+		const theme = root.getAttribute("data-theme");
+		if (theme === "light" || theme === "dark") return theme;
+		if (root.classList.contains("dark")) return "dark";
+		if (root.classList.contains("light")) return "light";
+		const scheme = getComputedStyle(root).colorScheme;
+		if (scheme === "light" || scheme === "dark") return scheme;
+		return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 	}
 	function unixTimestampToISOString(timestamp) {
 		if (!timestamp) return "";
@@ -9089,6 +8963,44 @@
 		const _createTime = unixTimestampToISOString(createTime);
 		const _updateTime = unixTimestampToISOString(updateTime);
 		return format.replace("{title}", _title).replace("{date}", dateStr()).replace("{timestamp}", timestamp()).replace("{chat_id}", chatId).replace("{create_time}", _createTime).replace("{update_time}", _updateTime).concat(`.${ext}`);
+	}
+	var CodeRegex = /(```[\s\S]*?(?:```|$)|`[^`\n]+`)/;
+	var MathRegex = new RegExp([
+		/(?<blockStart>^|\n)(?<indent>[ \t]*)\\\[(?<block>[\s\S]+?)\\\][ \t]*(?=\n|$)/.source,
+		/\\\[(?<display>[\s\S]+?)\\\]/.source,
+		/\\\((?<inline>[\s\S]+?)\\\)/.source,
+		/(?<dollarBlock>\$\$[\s\S]+?\$\$)/.source,
+		/(?<=^|\s)(?<dollarInline>\$[^\s$][^$\n]*\$)(?=\s|$)/.source
+	].join("|"), "g");
+	function protectMath(input) {
+		const formulas = [];
+		const placeholder = (formula) => `╬${formulas.push(formula) - 1}╬`;
+		const text = input.split(CodeRegex).map((part, index) => {
+			if (index % 2 === 1) return part;
+			return part.replace(MathRegex, (...args) => {
+				const groups = args.at(-1);
+				if (groups.block != null) {
+					const { blockStart = "", indent = "" } = groups;
+					return `${blockStart}${indent}${placeholder(`$$\n${groups.block.trim()}\n${indent}$$`)}`;
+				}
+				if (groups.display != null) return placeholder(`$$${groups.display.trim()}$$`);
+				if (groups.inline != null) return placeholder(`$${groups.inline.trim()}$`);
+				return placeholder(groups.dollarBlock ?? groups.dollarInline ?? "");
+			});
+		}).join("");
+		const restore = (output, escape = (formula) => formula) => output.replace(/╬(\d+)╬/g, (match, index) => {
+			const formula = formulas[Number(index)];
+			return formula == null ? match : escape(formula);
+		});
+		return {
+			text,
+			restore
+		};
+	}
+	function toBracketDelimiters(formula) {
+		const display = /^\$\$([\s\S]*)\$\$$/.exec(formula);
+		if (display) return `\\[${display[1]}\\]`;
+		return `\\(${formula.slice(1, -1)}\\)`;
 	}
 	var Schema = class {
 		constructor(property, normal, space) {
@@ -19034,7 +18946,6 @@
 		const timeStampHtml = ScriptStorage.get("exporter:timestamp_html") ?? false;
 		const timeStamp24H = ScriptStorage.get("exporter:timestamp_24h") ?? false;
 		const enableSources = ScriptStorage.get("exporter:enable_sources") ?? true;
-		const LatexRegex = /(\s\$\$.+?\$\$\s|\s\$.+?\$\s|\\\[.+?\\\]|\\\(.+?\\\))|(^\$$[\S\s]+?^\$$)|(^\$\$[\S\s]+?^\$\$\$)/gm;
 		const conversationHtml = conversationNodes.map(({ message, thinking }) => {
 			if (!message || !message.content) return null;
 			if (shouldSkipMessageInExport(message)) return null;
@@ -19049,25 +18960,14 @@
 					sourceListLabel: i18n_default.t("Sources")
 				}));
 				postSteps.push((input) => {
-					const matches = input.match(LatexRegex);
-					const isCodeBlock = /```/.test(input);
-					if (!isCodeBlock && matches) {
-						let index = 0;
-						input = input.replace(LatexRegex, () => {
-							return `╬${index++}╬`;
-						});
-						input = input.replace(/^\\\[(.+)\\\]$/gm, "$$$$$1$$$$").replace(/\\\[/g, "$$").replace(/\\\]/g, "$$").replace(/\\\(/g, "$").replace(/\\\)/g, "$");
-					}
-					let transformed = toHtml(fromMarkdown(input));
-					if (!isCodeBlock && matches) transformed = transformed.replace(/╬(\d+)╬/g, (_, index) => {
-						return matches[+index];
-					});
-					return transformed;
+					const { text, restore } = protectMath(input);
+					return restore(toHtml(fromMarkdown(text)), (formula) => escapeHtml(toBracketDelimiters(formula)));
 				});
-			}
-			if (message.author.role === "user") postSteps = [...postSteps, (input) => `<p class="no-katex">${escapeHtml(input)}</p>`];
+			} else postSteps = [(input) => `<p class="no-katex">${escapeHtml(input)}</p>`];
 			const postProcess = (input) => postSteps.reduce((acc, fn) => fn(acc), input);
 			const content = transformContent$2(message.content, message.metadata, postProcess);
+			const attachments = getFileAttachmentNames(message);
+			const attachmentsHtml = attachments.length ? `<ul class="attachments">${attachments.map((name) => `<li>📎 ${escapeHtml(name)}</li>`).join("")}</ul>` : "";
 			const timestamp = message?.create_time ?? "";
 			const showTimestamp = enableTimestamp && timeStampHtml && timestamp;
 			let timestampHtml = "";
@@ -19090,6 +18990,7 @@
         ${thinking ? formatThinkingHtml(thinking) : ""}
         <div class="conversation-content">
             ${content}
+            ${attachmentsHtml}
         </div>
     </div>
     ${timestampHtml}
@@ -19122,7 +19023,7 @@
 	function transformContent$2(content, metadata, postProcess) {
 		switch (content.content_type) {
 			case "text": return postProcess(content.parts?.join("\n") || "");
-			case "code": return `Code:\n\`\`\`\n${content.text}\n\`\`\`` || "";
+			case "code": return postProcess(`Code:\n\`\`\`\n${content.text}\n\`\`\``);
 			case "execution_output":
 				if (metadata?.aggregate_result?.messages) return metadata.aggregate_result.messages.filter((msg) => msg.message_type === "image").map((msg) => `<img src="${msg.image_url}" height="${msg.height}" width="${msg.width}" />`).join("\n");
 				return postProcess(`Result:\n\`\`\`\n${content.text}\n\`\`\`` || "");
@@ -19138,7 +19039,7 @@
 			case "multimodal_text": return content.parts?.map((part) => {
 				if (typeof part === "string") return postProcess(part);
 				if (part.content_type === "image_asset_pointer") return `<img src="${part.asset_pointer}" height="${part.height}" width="${part.width}" />`;
-				if (part.content_type === "audio_transcription") return `<div style="font-style: italic; opacity: 0.65;">“${part.text}”</div>`;
+				if (part.content_type === "audio_transcription") return `<div style="font-style: italic; opacity: 0.65;">“${escapeHtml(part.text)}”</div>`;
 				if (part.content_type === "audio_asset_pointer") return null;
 				if (part.content_type === "real_time_user_audio_video_asset_pointer") return null;
 				return postProcess("[Unsupported multimodal content]");
@@ -19294,10 +19195,6 @@
 	}
 	var MAX_SCREENSHOT_DIMENSION = 16e3;
 	var MAX_TILE_PIXELS = 16e6;
-	var VIRTUALIZED_TURN_SELECTOR = "[data-turn-id-container][data-is-intersecting], [data-turn-key]";
-	function turnContainerId(element) {
-		return element.dataset.turnIdContainer ?? element.dataset.turnKey;
-	}
 	function scrollElementWithinRoot(scrollRoot, target, block) {
 		const scrollRect = scrollRoot.getBoundingClientRect();
 		const targetRect = target.getBoundingClientRect();
@@ -19306,27 +19203,397 @@
 		scrollRoot.scrollTop = Math.max(0, Math.min(scrollRoot.scrollHeight - scrollRoot.clientHeight, scrollRoot.scrollTop + offset - alignment));
 		scrollRoot.dispatchEvent(new Event("scroll", { bubbles: true }));
 	}
-	async function exportToPng(fileNameFormat) {
-		if (!checkIfConversationStarted()) {
-			alert(i18n_default.t("Please start a conversation first"));
-			return false;
+	function findCommonAncestor(elements) {
+		let ancestor = elements[0]?.parentElement;
+		while (ancestor && !elements.every((element) => ancestor.contains(element))) ancestor = ancestor.parentElement;
+		return ancestor;
+	}
+	var REDESIGNED_THREAD_SELECTOR = "[data-chatgpt-conversation-selection-target]";
+	var REDESIGNED_SCROLL_ROOT_SELECTOR = "[data-app-action-timeline-scroll]";
+	var REDESIGNED_TURN_SELECTOR = "[data-turn-key]";
+	var HISTORY_SPINNER_SELECTOR = ":scope > div > [role=\"status\"]";
+	var HISTORY_LOAD_ATTEMPTS = 120;
+	function scrollRootTo(scrollRoot, scrollTop) {
+		scrollRoot.scrollTop = scrollTop;
+		scrollRoot.dispatchEvent(new Event("scroll", { bubbles: true }));
+	}
+	function createScrollPosition(scrollRoot) {
+		const initialScrollTop = scrollRoot.scrollTop;
+		scrollRoot.scrollTop = -1;
+		const reversed = initialScrollTop < 0 || scrollRoot.scrollTop < 0;
+		scrollRoot.scrollTop = initialScrollTop;
+		const max = () => Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
+		return {
+			reversed,
+			max,
+			get: () => reversed ? scrollRoot.scrollTop + max() : scrollRoot.scrollTop,
+			set: (top) => scrollRootTo(scrollRoot, reversed ? top - max() : top)
+		};
+	}
+	var IMAGE_LOAD_TIMEOUT = 5e3;
+	function waitForImages(root) {
+		const pending = Array.from(root.querySelectorAll("img")).filter((img) => !img.complete);
+		if (pending.length === 0) return Promise.resolve();
+		return Promise.race([Promise.all(pending.map((img) => new Promise((resolve) => {
+			img.addEventListener("load", resolve, { once: true });
+			img.addEventListener("error", resolve, { once: true });
+		}))), sleep(IMAGE_LOAD_TIMEOUT)]);
+	}
+	function inlineBlobImages(live, snapshot) {
+		const snapshotImages = snapshot.querySelectorAll("img");
+		live.querySelectorAll("img").forEach((img, index) => {
+			const target = snapshotImages[index];
+			if (!target || !img.currentSrc.startsWith("blob:") || !img.complete || img.naturalWidth === 0) return;
+			try {
+				const dataUrl = getBase64FromImg(img);
+				if (!dataUrl) return;
+				target.removeAttribute("srcset");
+				target.src = dataUrl;
+			} catch (error) {
+				console.warn("[ChatGPT Exporter:screenshot] failed to copy image", error);
+			}
+		});
+	}
+	var growUserBubbles = {
+		name: "chatgpt-exporter-grow-user-bubbles",
+		afterClone({ clone: root, nodeMap }) {
+			nodeMap?.forEach((source, clone) => {
+				if (!(source instanceof HTMLElement) || !(clone instanceof HTMLElement)) return;
+				if (!source.matches(".bg-user-message")) return;
+				for (let el = clone; el && el !== root; el = el.parentElement) el.style.height = "auto";
+				clone.querySelectorAll("*").forEach((child) => {
+					if (!(child instanceof HTMLImageElement)) child.style.height = "auto";
+				});
+			});
 		}
-		const effect = new Effect();
-		const conversationTurns = getConversationTurns(document).filter((turn) => turn.closest("main"));
-		const thread = findThreadContainer(conversationTurns, document);
-		if (!thread || thread.children.length === 0 || thread.scrollHeight < 50) {
-			alert(i18n_default.t("Failed to export to PNG. Failed to find the element node."));
-			return false;
+	};
+	var CJK_FONT_FAMILY = "chatgpt-exporter-cjk";
+	var CJK_UNICODE_RANGE = "U+2E80-2FFF, U+3000-303F, U+3040-30FF, U+3100-31FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE30-FE4F, U+FF00-FFEF";
+	var CJK_FONT_FACES = [
+		{
+			weight: "100 400",
+			names: ["PingFang TC", "PingFangTC-Regular"]
+		},
+		{
+			weight: "500",
+			names: ["PingFangTC-Medium"]
+		},
+		{
+			weight: "600 900",
+			names: ["PingFangTC-Semibold"]
 		}
-		const isDarkMode = detectColorScheme() === "dark";
+	].map(({ weight, names }) => `
+    @font-face {
+        font-family: "${CJK_FONT_FAMILY}";
+        src: ${names.map((name) => `local("${name}")`).join(", ")};
+        font-weight: ${weight};
+        unicode-range: ${CJK_UNICODE_RANGE};
+    }
+`).join("");
+	async function matchCjkMetrics(root) {
+		const elements = [root, ...Array.from(root.querySelectorAll("*"))];
+		const families = new Map(elements.map((el) => [el, getComputedStyle(el).fontFamily]));
+		elements.forEach((el) => {
+			const family = families.get(el);
+			if (!family || el !== root && family === families.get(el.parentElement)) return;
+			el.style.fontFamily = `"${CJK_FONT_FAMILY}", ${family}`;
+		});
+		await Promise.all([
+			"400",
+			"500",
+			"600"
+		].map((weight) => document.fonts.load(`${weight} 16px "${CJK_FONT_FAMILY}"`, "中").catch(() => [])));
+	}
+	var EMOJI_PATTERN = /[\u{1F1E6}-\u{1F1FF}]{2}|[0-9#*]️⃣|(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}️)(?:[\u{1F3FB}-\u{1F3FF}]|️|‍(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}️?))*/gu;
+	function pinEmojiWidths(root) {
+		const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+		const textNodes = [];
+		for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+			EMOJI_PATTERN.lastIndex = 0;
+			if (EMOJI_PATTERN.test(node.nodeValue ?? "") && !node.parentElement?.closest("style, script, svg")) textNodes.push(node);
+		}
+		const wrappers = [];
+		textNodes.forEach((node) => {
+			const text = node.nodeValue ?? "";
+			const fragment = document.createDocumentFragment();
+			let last = 0;
+			for (const match of text.matchAll(EMOJI_PATTERN)) {
+				fragment.append(text.slice(last, match.index));
+				const wrapper = document.createElement("span");
+				wrapper.textContent = match[0];
+				fragment.append(wrapper);
+				wrappers.push(wrapper);
+				last = match.index + match[0].length;
+			}
+			fragment.append(text.slice(last));
+			node.replaceWith(fragment);
+		});
+		const widths = wrappers.map((wrapper) => wrapper.getBoundingClientRect().width);
+		wrappers.forEach((wrapper, index) => {
+			Object.assign(wrapper.style, {
+				display: "inline-block",
+				width: `${widths[index]}px`,
+				textIndent: "0"
+			});
+		});
+	}
+	var TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+	var FAVICON_MAX_SIZE = 40;
+	function toSvgDataUrl(svg) {
+		return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+	}
+	function getFaviconHost(src) {
+		try {
+			const url = new URL(src);
+			const site = url.searchParams.get("url") || url.searchParams.get("domain");
+			return new URL(site && /^https?:/.test(site) ? site : `https://${site || url.hostname}`).hostname.replace(/^www\./, "");
+		} catch {
+			return "";
+		}
+	}
+	function createImagePlaceholder(target, src, isDarkMode) {
+		const rect = target.getBoundingClientRect();
+		const width = Math.round(rect.width);
+		const height = Math.round(rect.height);
+		if (width === 0 || height === 0) return TRANSPARENT_PIXEL;
+		const fill = isDarkMode ? "#303030" : "#ececec";
+		const ink = isDarkMode ? "#8f8f8f" : "#a3a3a3";
+		if (Math.max(width, height) <= FAVICON_MAX_SIZE) {
+			const initial = getFaviconHost(src).charAt(0).toUpperCase();
+			const size = Math.min(width, height);
+			return toSvgDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><circle cx="${width / 2}" cy="${height / 2}" r="${size / 2}" fill="${fill}"/><text x="50%" y="50%" dy="0.35em" text-anchor="middle" font-family="system-ui, sans-serif" font-size="${size * .55}" font-weight="600" fill="${ink}">${initial}</text></svg>`);
+		}
+		const iconSize = Math.max(16, Math.min(48, Math.min(width, height) * .3));
+		const scale = iconSize / 24;
+		return toSvgDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="${fill}"/><g transform="translate(${(width - iconSize) / 2} ${(height - iconSize) / 2}) scale(${scale})" fill="none" stroke="${ink}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="9.5" r="1.75"/><path d="M3.5 17.5l5-5 3.5 3.5 2.5-2.5 6 6"/></g></svg>`);
+	}
+	var EXTERNAL_IMAGE_CONCURRENCY = 6;
+	var EXTERNAL_IMAGE_SCALE = 2;
+	function loadCorsImage(url) {
+		return new Promise((resolve) => {
+			const img = new Image();
+			const timer = setTimeout(() => resolve(null), IMAGE_LOAD_TIMEOUT);
+			img.crossOrigin = "anonymous";
+			img.onload = () => {
+				clearTimeout(timer);
+				resolve(img);
+			};
+			img.onerror = () => {
+				clearTimeout(timer);
+				resolve(null);
+			};
+			img.src = url;
+		});
+	}
+	function encodeImage(source, target) {
+		const rect = target.getBoundingClientRect();
+		const ratio = rect.width > 0 && rect.height > 0 ? Math.min(1, Math.max(rect.width * EXTERNAL_IMAGE_SCALE / source.naturalWidth, rect.height * EXTERNAL_IMAGE_SCALE / source.naturalHeight)) : 1;
+		const canvas = document.createElement("canvas");
+		canvas.width = Math.max(1, Math.round(source.naturalWidth * ratio));
+		canvas.height = Math.max(1, Math.round(source.naturalHeight * ratio));
+		const context = canvas.getContext("2d");
+		if (!context) return null;
+		context.drawImage(source, 0, 0, canvas.width, canvas.height);
+		return canvas.toDataURL("image/png");
+	}
+	async function inlineExternalImages(root, isDarkMode) {
+		const imagesBySrc = new Map();
+		root.querySelectorAll("img").forEach((img) => {
+			const src = img.currentSrc || img.src;
+			try {
+				const url = new URL(src, location.href);
+				if (!url.protocol.startsWith("http") || url.origin === location.origin) return;
+			} catch {
+				return;
+			}
+			imagesBySrc.set(src, [...imagesBySrc.get(src) ?? [], img]);
+		});
+		const queue = Array.from(imagesBySrc.entries());
+		const worker = async () => {
+			for (let entry = queue.shift(); entry; entry = queue.shift()) {
+				const [src, targets] = entry;
+				const source = await loadCorsImage(src);
+				targets.forEach((target) => {
+					let dataUrl = null;
+					try {
+						dataUrl = source && encodeImage(source, target);
+					} catch {}
+					target.removeAttribute("srcset");
+					target.src = dataUrl || createImagePlaceholder(target, src, isDarkMode);
+				});
+			}
+		};
+		await Promise.all(Array.from({ length: EXTERNAL_IMAGE_CONCURRENCY }, worker));
+	}
+	function getSurfaceColor(element, fallback) {
+		for (let el = element; el; el = el.parentElement) {
+			const color = getComputedStyle(el).backgroundColor;
+			if (color && color !== "transparent" && !/^rgba\(.*,\s*0\)$/.test(color)) return color;
+		}
+		return fallback;
+	}
+	async function prepareRedesignedThread(threadEl, effect, isDarkMode) {
+		const scrollRoot = threadEl.closest(REDESIGNED_SCROLL_ROOT_SELECTOR);
+		if (!scrollRoot || !threadEl.querySelector(REDESIGNED_TURN_SELECTOR)) return null;
+		const backgroundColor = getSurfaceColor(threadEl, isDarkMode ? "#212121" : "#fff");
+		const position = createScrollPosition(scrollRoot);
+		effect.add(() => {
+			const distanceFromBottom = position.max() - position.get();
+			return () => position.set(position.max() - distanceFromBottom);
+		});
+		effect.run();
+		let previousScrollHeight = -1;
+		for (let attempt = 0; attempt < HISTORY_LOAD_ATTEMPTS && threadEl.querySelector(HISTORY_SPINNER_SELECTOR); attempt++) {
+			if (scrollRoot.scrollHeight === previousScrollHeight) {
+				position.set(scrollRoot.clientHeight * 2);
+				await sleep(100);
+			}
+			previousScrollHeight = scrollRoot.scrollHeight;
+			position.set(0);
+			await sleep(500);
+		}
+		if (threadEl.querySelector(HISTORY_SPINNER_SELECTOR)) console.warn("[ChatGPT Exporter:screenshot] history is still loading; exporting the loaded part");
+		const snapshots = new Map();
+		const getListOffset = (turn) => turn.getBoundingClientRect().top - scrollRoot.getBoundingClientRect().top + position.get();
+		const getMountedTurns = () => Array.from(threadEl.querySelectorAll(REDESIGNED_TURN_SELECTOR));
+		const captureMountedTurns = async () => {
+			const turns = getMountedTurns().filter((turn) => {
+				const key = turn.dataset.turnKey;
+				return !!key && !snapshots.has(key) && turn.offsetHeight > 0;
+			});
+			if (turns.length === 0) return;
+			turns.forEach((turn) => turn.querySelectorAll("img[loading=\"lazy\"]").forEach((img) => img.setAttribute("loading", "eager")));
+			await Promise.all(turns.map(waitForImages));
+			await sleep(100);
+			turns.forEach((turn) => {
+				const key = turn.dataset.turnKey;
+				if (snapshots.has(key) || !turn.isConnected) return;
+				const snapshot = turn.cloneNode(true);
+				snapshot.querySelectorAll("img[loading=\"lazy\"]").forEach((img) => img.setAttribute("loading", "eager"));
+				inlineBlobImages(turn, snapshot);
+				snapshots.set(key, {
+					top: getListOffset(turn),
+					snapshot
+				});
+			});
+		};
+		position.set(0);
+		await sleep(250);
+		while (true) {
+			await captureMountedTurns();
+			const previousTop = position.get();
+			if (previousTop >= position.max() - 1) break;
+			const lastTurn = getMountedTurns().at(-1);
+			const lastTurnOffset = lastTurn ? lastTurn.getBoundingClientRect().top - scrollRoot.getBoundingClientRect().top : 0;
+			position.set(lastTurnOffset > 0 ? previousTop + Math.floor(lastTurnOffset) : position.max());
+			await sleep(250);
+			if (position.get() <= previousTop) break;
+		}
+		await captureMountedTurns();
+		if (snapshots.size === 0) return null;
+		const staticThread = threadEl.cloneNode(false);
+		staticThread.removeAttribute("data-chatgpt-conversation-selection-target");
+		staticThread.removeAttribute("data-thread-find-target");
+		staticThread.setAttribute("data-chatgpt-exporter-screenshot-root", "");
+		Object.assign(staticThread.style, {
+			position: "absolute",
+			left: "-100000px",
+			top: "0",
+			width: `${threadEl.offsetWidth}px`,
+			height: "auto",
+			minHeight: "0",
+			pointerEvents: "none"
+		});
+		const style = document.createElement("style");
+		style.textContent = `${CJK_FONT_FACES}
+        [data-chatgpt-exporter-screenshot-root] {
+            color: ${isDarkMode ? "#ececec" : "#0d0d0d"};
+            background-color: ${backgroundColor};
+        }
+
+        [data-chatgpt-exporter-screenshot-root] [data-virtualized-turn-content] {
+            content-visibility: visible !important;
+        }
+
+        /* date separators such as "Yesterday 10:08 AM" */
+        [data-chatgpt-exporter-screenshot-root] [role="separator"] {
+            display: none;
+        }
+
+        /* the "Is this conversation helpful so far?" card */
+        [data-chatgpt-exporter-screenshot-root] :has(> aside) {
+            display: none;
+        }
+
+        /* image groups ChatGPT hid for lack of images, left as empty skeletons */
+        [data-chatgpt-exporter-screenshot-root] :has(> [class~="group/generated-image-preview"]):not(:has(img)) {
+            display: none;
+        }
+
+        /* Keep the spacing of the action row and code block headers. */
+        [data-chatgpt-exporter-screenshot-root] .turn-action-controls,
+        [data-chatgpt-exporter-screenshot-root] [data-markdown-copy="code-block"] button {
+            visibility: hidden;
+        }
+    `;
+		staticThread.appendChild(style);
+		Array.from(snapshots.values()).sort((a, b) => a.top - b.top).forEach(({ snapshot }) => staticThread.appendChild(snapshot));
+		if (document.documentElement.lang) staticThread.lang = document.documentElement.lang;
+		effect.add(() => {
+			threadEl.after(staticThread);
+			return () => staticThread.remove();
+		});
+		effect.run();
+		await matchCjkMetrics(staticThread);
+		pinEmojiWidths(staticThread);
+		await inlineExternalImages(staticThread, isDarkMode);
+		await sleep(100);
+		return {
+			screenshotEls: splitIntoParts(staticThread, effect),
+			backgroundColor
+		};
+	}
+	var MAX_PART_HEIGHT = 32e3;
+	function splitIntoParts(staticThread, effect) {
+		const maxHeight = MAX_PART_HEIGHT / Math.min(2, MAX_SCREENSHOT_DIMENSION / staticThread.offsetWidth) - 100;
+		if (staticThread.scrollHeight <= maxHeight) return [staticThread];
+		const style = staticThread.querySelector(":scope > style");
+		const groups = [[]];
+		let groupHeight = 0;
+		Array.from(staticThread.children).forEach((turn) => {
+			if (!(turn instanceof HTMLElement) || turn === style) return;
+			const height = turn.offsetHeight;
+			if (groups.at(-1).length > 0 && groupHeight + height > maxHeight) {
+				groups.push([]);
+				groupHeight = 0;
+			}
+			groups.at(-1).push(turn);
+			groupHeight += height;
+		});
+		const parts = groups.map((turns) => {
+			const part = staticThread.cloneNode(false);
+			if (style) part.appendChild(style.cloneNode(true));
+			part.append(...turns);
+			return part;
+		});
+		effect.add(() => {
+			staticThread.after(...parts);
+			return () => parts.forEach((part) => part.remove());
+		});
+		effect.run();
+		return parts;
+	}
+	async function prepareLegacyThread(effect, isDarkMode) {
+		const conversationTurns = Array.from(document.querySelectorAll("#thread [data-testid^=\"conversation-turn-\"]"));
+		const thread = findCommonAncestor(conversationTurns);
+		if (!thread || thread.children.length === 0 || thread.scrollHeight < 50) return null;
 		const threadEl = thread;
-		const turnContainerIds = Array.from(threadEl.querySelectorAll(VIRTUALIZED_TURN_SELECTOR)).filter((element) => !!element.querySelector(anyOf(TURN_SELECTORS)) || element.offsetHeight > 0 || !!element.style.getPropertyValue("--last-known-height")).map((element) => turnContainerId(element)).filter((id) => !!id && id !== "client-created-root");
+		const turnContainerIds = Array.from(threadEl.querySelectorAll("[data-turn-id-container][data-is-intersecting]")).filter((element) => !!element.querySelector("[data-testid^=\"conversation-turn-\"]") || element.offsetHeight > 0 || !!element.style.getPropertyValue("--last-known-height")).map((element) => element.dataset.turnIdContainer).filter((id) => !!id && id !== "client-created-root");
 		effect.add(() => {
 			threadEl.setAttribute("data-chatgpt-exporter-screenshot-root", "");
 			const style = document.createElement("style");
 			style.textContent = `
             [data-chatgpt-exporter-screenshot-root],
-            [data-chatgpt-exporter-screenshot-root] [data-turn-key],
             #thread [data-testid^="conversation-turn-"] {
                 color: ${isDarkMode ? "#ececec" : "#0d0d0d"};
                 background-color: ${isDarkMode ? "#212121" : "#fff"};
@@ -19351,7 +19618,7 @@
             /* date separators such as "Yesterday 10:08 AM" */
             [data-chatgpt-exporter-screenshot-root] [role="separator"],
             /* any other elements that are not conversation turns */
-            [data-chatgpt-exporter-screenshot-root] > :not([data-turn-id-container]):not([data-turn-key]):not([data-testid^="conversation-turn-"]):not(:has([data-turn-key])):not(:has([data-testid^="conversation-turn-"])),
+            [data-chatgpt-exporter-screenshot-root] > :not([data-turn-id-container]):not([data-testid^="conversation-turn-"]):not(:has([data-testid^="conversation-turn-"])),
             /* hide back to top button */
             button.absolute,
             /* question button */
@@ -19360,7 +19627,6 @@
             }
 
             /* Preserve the action row's spacing while hiding its toolbar. */
-            [data-turn-key] [role="group"]:has(button[aria-label]),
             [data-testid^="conversation-turn-"] [role="group"]:has([data-testid="copy-turn-action-button"]),
             /* code block buttons */
             #thread pre button {
@@ -19368,7 +19634,6 @@
             }
 
             /* Later user turns currently have much larger top padding than the first one. */
-            [data-turn-key] > h4 + div,
             [data-testid^="conversation-turn-"][data-turn="user"] > h4 + div {
                 padding-top: 0 !important;
             }
@@ -19379,7 +19644,7 @@
 				threadEl.removeAttribute("data-chatgpt-exporter-screenshot-root");
 			};
 		});
-		const scrollRoot = findScrollRoot(threadEl);
+		const scrollRoot = threadEl.closest("[data-scroll-root]");
 		if (scrollRoot) effect.add(() => {
 			const scrollTop = scrollRoot.scrollTop;
 			const scrollLeft = scrollRoot.scrollLeft;
@@ -19393,20 +19658,20 @@
 		});
 		effect.run();
 		const turnSnapshots = new Map();
-		if (scrollRoot && turnContainerIds.length > 0) for (const turnContainerIdValue of turnContainerIds) {
+		if (scrollRoot && turnContainerIds.length > 0) for (const turnContainerId of turnContainerIds) {
 			for (let pass = 0; pass < 10; pass++) {
-				const container = Array.from(threadEl.querySelectorAll(VIRTUALIZED_TURN_SELECTOR)).find((element) => turnContainerId(element) === turnContainerIdValue);
+				const container = Array.from(threadEl.querySelectorAll("[data-turn-id-container][data-is-intersecting]")).find((element) => element.dataset.turnIdContainer === turnContainerId);
 				if (!container) break;
-				if (container.querySelector(anyOf(TURN_SELECTORS)) ?? container) {
-					turnSnapshots.set(turnContainerIdValue, container.cloneNode(true));
+				if (container.querySelector("[data-testid^=\"conversation-turn-\"]")) {
+					turnSnapshots.set(turnContainerId, container.cloneNode(true));
 					break;
 				}
 				scrollElementWithinRoot(scrollRoot, container, "center");
 				await sleep(250);
 			}
-			if (!turnSnapshots.has(turnContainerIdValue)) {
-				const placeholder = Array.from(threadEl.querySelectorAll(VIRTUALIZED_TURN_SELECTOR)).find((element) => turnContainerId(element) === turnContainerIdValue);
-				if (placeholder) turnSnapshots.set(turnContainerIdValue, placeholder.cloneNode(true));
+			if (!turnSnapshots.has(turnContainerId)) {
+				const placeholder = Array.from(threadEl.querySelectorAll("[data-turn-id-container][data-is-intersecting]")).find((element) => element.dataset.turnIdContainer === turnContainerId);
+				if (placeholder) turnSnapshots.set(turnContainerId, placeholder.cloneNode(true));
 			}
 		}
 		else if (scrollRoot && conversationTurns[0]) {
@@ -19427,8 +19692,8 @@
 			staticThread.style.maxHeight = "none";
 			staticThread.style.overflow = "visible";
 			staticThread.style.pointerEvents = "none";
-			for (const turnContainerIdValue of turnContainerIds) {
-				const snapshot = turnSnapshots.get(turnContainerIdValue);
+			for (const turnContainerId of turnContainerIds) {
+				const snapshot = turnSnapshots.get(turnContainerId);
 				if (snapshot) staticThread.appendChild(snapshot);
 			}
 			effect.add(() => {
@@ -19439,6 +19704,57 @@
 			screenshotEl = staticThread;
 			await sleep(100);
 		}
+		return {
+			screenshotEls: [screenshotEl],
+			backgroundColor: isDarkMode ? "#212121" : "#fff"
+		};
+	}
+	async function exportToPng(fileNameFormat) {
+		if (!checkIfConversationStarted()) {
+			alert(i18n_default.t("Please start a conversation first"));
+			return false;
+		}
+		const effect = new Effect();
+		const isDarkMode = getColorScheme() === "dark";
+		const redesignedThread = document.querySelector(REDESIGNED_THREAD_SELECTOR);
+		const source = redesignedThread ? await prepareRedesignedThread(redesignedThread, effect, isDarkMode) : await prepareLegacyThread(effect, isDarkMode);
+		if (!source) {
+			effect.dispose();
+			alert(i18n_default.t("Failed to export to PNG. Failed to find the element node."));
+			return false;
+		}
+		const { screenshotEls, backgroundColor } = source;
+		const pngs = [];
+		for (const screenshotEl of screenshotEls) {
+			const png = await renderPng(screenshotEl, effect, backgroundColor);
+			if (!png) {
+				effect.dispose();
+				alert("Failed to export to PNG. This might be caused by the size of the conversation. Please try to export a smaller conversation.");
+				return false;
+			}
+			pngs.push(png);
+		}
+		effect.dispose();
+		const chatId = getChatIdFromUrl() || void 0;
+		const fileName = getFileNameWithFormat(fileNameFormat, "png", { chatId });
+		if (pngs.length === 1) {
+			downloadFile(fileName, "image/png", pngs[0]);
+			return true;
+		}
+		const zip = new jszip.default();
+		const baseName = fileName.replace(/\.png$/, "");
+		const digits = String(pngs.length).length;
+		pngs.forEach((png, index) => {
+			zip.file(`${baseName}-${String(index + 1).padStart(digits, "0")}.png`, png);
+		});
+		const blob = await zip.generateAsync({
+			type: "blob",
+			compression: "STORE"
+		});
+		downloadFile(getFileNameWithFormat(fileNameFormat, "zip", { chatId }), "application/zip", blob);
+		return true;
+	}
+	async function renderPng(screenshotEl, effect, backgroundColor) {
 		effect.add(() => {
 			const minHeight = screenshotEl.style.minHeight;
 			screenshotEl.style.minHeight = `${screenshotEl.scrollHeight}px`;
@@ -19448,13 +19764,14 @@
 		});
 		effect.run();
 		await sleep(0);
-		const backgroundColor = isDarkMode ? "#212121" : "#fff";
 		const width = Math.max(screenshotEl.offsetWidth, screenshotEl.scrollWidth);
 		const height = Math.max(screenshotEl.offsetHeight, screenshotEl.scrollHeight);
 		let capture = null;
 		try {
 			capture = await (0, _zumer_snapdom.snapdom)(screenshotEl, {
 				embedFonts: true,
+				reconcile: true,
+				plugins: [growUserBubbles],
 				backgroundColor
 			});
 		} catch (error) {
@@ -19536,13 +19853,7 @@
 			console.warn("[ChatGPT Exporter:screenshot] tiled export failed; using downscaled fallback");
 			png = await takeDownscaledScreenshot();
 		}
-		effect.dispose();
-		if (!png) {
-			alert("Failed to export to PNG. This might be caused by the size of the conversation. Please try to export a smaller conversation.");
-			return false;
-		}
-		downloadFile(getFileNameWithFormat(fileNameFormat, "png", { chatId: getChatIdFromUrl() || void 0 }), "image/png", png);
-		return true;
+		return png;
 	}
 	function convertMessageToTavern(node) {
 		if (!node.message || shouldSkipMessageInExport(node.message) || node.message.content.content_type !== "text") return null;
@@ -19702,36 +20013,6 @@
 	function conversationToJson(conversation) {
 		return JSON.stringify(conversation);
 	}
-	var CodeRegex = /(```[\s\S]*?(?:```|$)|`[^`\n]+`)/;
-	var MathRegex = new RegExp([
-		/(?<blockStart>^|\n)(?<indent>[ \t]*)\\\[(?<block>[\s\S]+?)\\\][ \t]*(?=\n|$)/.source,
-		/\\\[(?<display>[\s\S]+?)\\\]/.source,
-		/\\\((?<inline>[\s\S]+?)\\\)/.source,
-		/(?<dollarBlock>\$\$[\s\S]+?\$\$)/.source,
-		/(?<=^|\s)(?<dollarInline>\$[^\s$][^$\n]*\$)(?=\s|$)/.source
-	].join("|"), "g");
-	function protectMath(input) {
-		const formulas = [];
-		const placeholder = (formula) => `╬${formulas.push(formula) - 1}╬`;
-		const text = input.split(CodeRegex).map((part, index) => {
-			if (index % 2 === 1) return part;
-			return part.replace(MathRegex, (...args) => {
-				const groups = args.at(-1);
-				if (groups.block != null) {
-					const { blockStart = "", indent = "" } = groups;
-					return `${blockStart}${indent}${placeholder(`$$\n${groups.block.trim()}\n${indent}$$`)}`;
-				}
-				if (groups.display != null) return placeholder(`$$${groups.display.trim()}$$`);
-				if (groups.inline != null) return placeholder(`$${groups.inline.trim()}$`);
-				return placeholder(groups.dollarBlock ?? groups.dollarInline ?? "");
-			});
-		}).join("");
-		const restore = (output) => output.replace(/╬(\d+)╬/g, (match, index) => formulas[Number(index)] ?? match);
-		return {
-			text,
-			restore
-		};
-	}
 	async function exportToMarkdown(fileNameFormat, metaList) {
 		if (!checkIfConversationStarted()) {
 			alert(i18n_default.t("Please start a conversation first"));
@@ -19821,7 +20102,9 @@
 			});
 			const postProcess = (input) => postSteps.reduce((acc, fn) => fn(acc), input);
 			const content = transformContent$1(message.content, message.metadata, postProcess);
-			return `#### ${author}:\n${timestampHtml}${thinkingBlock}${content}`;
+			const attachments = getFileAttachmentNames(message).map((name) => `- 📎 ${name}`).join("\n");
+			const attachmentsBlock = attachments ? `\n\n${attachments}` : "";
+			return `#### ${author}:\n${timestampHtml}${thinkingBlock}${content}${attachmentsBlock}`;
 		}).filter(Boolean).join("\n\n")}`;
 	}
 	function transformFootNotes$1(input, metadata) {
@@ -19841,7 +20124,7 @@
 	function transformContent$1(content, metadata, postProcess) {
 		switch (content.content_type) {
 			case "text": return postProcess(content.parts?.join("\n") || "");
-			case "code": return `Code:\n\`\`\`\n${content.text}\n\`\`\`` || "";
+			case "code": return postProcess(`Code:\n\`\`\`\n${content.text}\n\`\`\``);
 			case "execution_output":
 				if (metadata?.aggregate_result?.messages) return metadata.aggregate_result.messages.filter((msg) => msg.message_type === "image").map((msg) => `![image](${msg.image_url})`).join("\n");
 				return postProcess(`Result:\n\`\`\`\n${content.text}\n\`\`\`` || "");
@@ -20178,7 +20461,7 @@
 			this.eventEmitter.emit("done", this.results);
 		}
 	};
-	_css(".CheckBoxLabel {\n    position: relative;\n    display: flex;\n    font-size: 16px;\n    vertical-align: middle;\n}\n\n.CheckBoxLabel * {\n    cursor: pointer;\n}\n\n.CheckBoxLabel[disabled] {\n    opacity: 0.7;\n}\n\n.CheckBoxLabel[disabled] * {\n    cursor: not-allowed;\n}\n\n.CheckBoxLabel input {\n    position: absolute;\n    opacity: 0;\n    width: 100%;\n    height: 100%;\n    top: 0;\n    left: 0;\n    margin: 0;\n    padding: 0;\n}\n\n.CheckBoxLabel .IconWrapper {\n    display: inline-flex;\n    align-items: center;\n    position: relative;\n    vertical-align: middle;\n    font-size: 1.5rem;\n}\n\n.CheckBoxLabel input:checked ~ svg {\n    color: rgb(28 100 242);\n}\n\n[data-ce-theme=\"dark\"] .CheckBoxLabel input:checked ~ svg {\n    color: rgb(144, 202, 249);\n}\n\n.CheckBoxLabel .LabelText {\n    margin-left: 0.5rem;\n    font-size: 1rem;\n    line-height: 1.5;\n}\n");
+	_css(".CheckBoxLabel {\n    position: relative;\n    display: flex;\n    font-size: 16px;\n    vertical-align: middle;\n}\n\n.CheckBoxLabel * {\n    cursor: pointer;\n}\n\n.CheckBoxLabel[disabled] {\n    opacity: 0.7;\n}\n\n.CheckBoxLabel[disabled] * {\n    cursor: not-allowed;\n}\n\n.CheckBoxLabel input {\n    position: absolute;\n    opacity: 0;\n    width: 100%;\n    height: 100%;\n    top: 0;\n    left: 0;\n    margin: 0;\n    padding: 0;\n}\n\n.CheckBoxLabel .IconWrapper {\n    display: inline-flex;\n    align-items: center;\n    position: relative;\n    vertical-align: middle;\n    font-size: 1.5rem;\n}\n\n/* Match ChatGPT's switches, which follow the accent chosen in Appearance. */\n.CheckBoxLabel input:checked ~ svg {\n    color: var(--color-chart-blue, #3a83f7);\n}\n\n.CheckBoxLabel .LabelText {\n    margin-left: 0.5rem;\n    font-size: 1rem;\n    line-height: 1.5;\n}\n");
 	function FileCode() {
 		return o$5("svg", {
 			xmlns: "http://www.w3.org/2000/svg",
@@ -20623,6 +20906,11 @@
 		} catch {
 			return title.toLowerCase().includes(lower);
 		}
+	}
+	function describeListLoadError(error) {
+		if (error instanceof RateLimitError) return error.retryAfterFromServer ? `Rate limited by the API · wait ${Math.ceil(error.retryAfterMs / 1e3)}s and try again` : "Rate limited by the API · wait a moment and try again";
+		if (error instanceof Error && error.message) return error.message;
+		return "Failed to load conversations";
 	}
 	var ProjectSelect = ({ projects, selected, setSelected, disabled, loading }) => {
 		const { t } = useTranslation();
@@ -21210,6 +21498,7 @@
 				setApiConversations(cache.items);
 				setHasMore(cache.hasMore);
 				setTotalAvailable(cache.total);
+				setError("");
 				setLoading(false);
 				refreshConversationList(cache.items, (offset, limit) => fetchConversationsPage(null, offset, limit), 100, exportAllLimit).then(({ head, total }) => {
 					if (listCache) listCache = {
@@ -21228,6 +21517,7 @@
 			setApiConversations([]);
 			setHasMore(false);
 			setTotalAvailable(null);
+			setError("");
 			setLoading(true);
 			let loadedHasMore = false;
 			let loadFailed = false;
@@ -21236,8 +21526,9 @@
 			}, (hasMore) => {
 				loadedHasMore = hasMore;
 				if (alive()) setHasMore(hasMore);
-			}, () => {
+			}, (error) => {
 				loadFailed = true;
+				if (alive()) setError(describeListLoadError(error));
 			}).then((items) => {
 				if (selectedProjectId === null && items.length > 0 && !loadFailed) listCache = {
 					limit: exportAllLimit,
@@ -21248,7 +21539,7 @@
 			}).catch((err) => {
 				if (!alive()) return;
 				console.error("Error fetching conversations:", err);
-				setError(err.message || "Failed to load conversations");
+				setError(describeListLoadError(err));
 			}).finally(() => {
 				if (alive()) setLoading(false);
 			});
@@ -21500,6 +21791,11 @@
 				setLoading(false);
 			}
 		} : void 0;
+		const handleKeyDown = (e) => {
+			if (e.key !== "Enter" && e.key !== " ") return;
+			e.preventDefault();
+			e.currentTarget.click();
+		};
 		return o$5("div", {
 			className: `
             menu-item
@@ -21508,9 +21804,14 @@
             transition-colors duration-200
             cursor-pointer
             border border-menu ${className}`,
+			role: "button",
+			tabIndex: disabled ? -1 : 0,
 			onClick: handleClick,
 			onTouchStart: handleClick,
+			onKeyDown: handleKeyDown,
 			disabled,
+			"aria-disabled": disabled || void 0,
+			"aria-busy": loading || void 0,
 			"aria-label": ariaLabel,
 			title,
 			children: loading ? o$5("div", {
@@ -22425,8 +22726,8 @@
 			})] })]
 		});
 	};
-	_css("span[data-time-format] {\n    display: none;\n}\n\nbody[data-time-format=\"12\"] span[data-time-format=\"12\"] {\n    display: inline;\n}\n\nbody[data-time-format=\"24\"] span[data-time-format=\"24\"] {\n    display: inline;\n}\n\n.Select {\n    padding: 0 2rem 0 0.5rem;\n    width: auto;\n    min-width: 7.5rem;\n    border-radius: 4px;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\n[data-ce-theme=\"dark\"] .Select {\n    background-color: #2f2f2f;\n    color: #fff;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\nhtml {\n    --ce-text-primary: var(--text-primary, #0d0d0d);\n    --ce-menu-primary: #ffffff;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #ececec);\n    --ce-border-light: #0d0d0d26;\n}\n\n/* `data-ce-theme` is stamped on <html> by utils/theme.ts, which resolves the\n   scheme from ChatGPT's own declaration and, failing that, from the\n   background it actually painted. */\n[data-ce-theme=\"dark\"] {\n    --ce-text-primary: var(--text-primary, #ececec);\n    --ce-menu-primary: #2A2A2A;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #212121);\n    --ce-border-light: var(--border-default, rgba(255, 255, 255, .15));\n}\n\n/* Insurance for the moment before that attribute lands — and for the case\n   where the script fails to run at all. Skipped once we have resolved light,\n   so an explicit light theme under a dark OS is not overridden. */\n@media (prefers-color-scheme: dark) {\n    html:not([data-ce-theme=\"light\"]) {\n        --ce-text-primary: var(--text-primary, #ececec);\n        --ce-menu-primary: #2A2A2A;\n        --ce-menu-secondary: var(--sidebar-surface-secondary, #212121);\n        --ce-border-light: var(--border-default, rgba(255, 255, 255, .15));\n    }\n}\n\n/* Define our own background in both themes — this used to lean on\n   ChatGPT's bg-menu utility class, which no longer paints one */\n.bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n[data-ce-theme=\"dark\"] .bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n.border-menu {\n    border-color: var(--ce-border-light);\n}\n\n.menu-item {\n    height: 46px;\n}\n\n.menu-item[disabled] {\n    filter: brightness(0.5);\n}\n\n.ce-nav-trigger {\n    min-width: 0;\n    border: 0;\n    color: var(--ce-text-primary);\n}\n\n.ce-nav-trigger .ce-menu-item-text {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.ce-nav-trigger-collapsed {\n    width: 32px;\n    height: 32px;\n    margin: 0 auto 0.5rem;\n    padding: 0;\n    justify-content: center;\n    gap: 0;\n    border-radius: 8px;\n    color: var(--text-secondary, var(--ce-text-primary));\n}\n\n.ce-nav-trigger-collapsed:hover {\n    background-color: var(--sidebar-surface-secondary, rgba(255, 255, 255, 0.1));\n}\n\n.ce-nav-trigger-collapsed .ce-menu-item-text {\n    display: none;\n}\n\n/* --- Mount-specific trigger styling -------------------------------------\n   The menu is placed by `utils/navMount.ts`, which tags its container with\n   `data-ce-mount`. Each surface needs different spacing, so the styling is\n   keyed off the mount instead of being baked into the component. */\n\n/* Expanded sidebar: the menu is the panel's last row. */\n[data-ce-mount=\"sidebar-panel\"] {\n    flex: 0 0 auto;\n    padding: 0.25rem 0.5rem 0.5rem;\n}\n\n/* Collapsed sidebar: match the icon rail's square buttons. */\n[data-ce-mount=\"nav-rail\"] {\n    display: flex;\n    justify-content: center;\n    width: 100%;\n    padding-bottom: 0.25rem;\n}\n\n/* Last-resort launcher: a small floating button that stays clear of\n   ChatGPT's own controls and below its dialogs. */\n#chatgpt-exporter-floating-root {\n    position: fixed;\n    left: 12px;\n    bottom: 12px;\n    z-index: 998;\n}\n\n#chatgpt-exporter-floating-root [data-ce-mount=\"floating\"] .ce-nav-trigger {\n    padding: 0.375rem 0.75rem;\n    border-radius: 9999px;\n    background-color: var(--ce-menu-secondary, rgba(0, 0, 0, 0.75));\n    color: var(--ce-text-primary, #fff);\n    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);\n}\n\n.ce-card {\n    border-radius: 1rem;\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);\n}\n\n/* ChatGPT's main column carries its own z-index, which beats the menu's\n   portalled Radix popper wrapper (position: fixed, z-index: auto). Raise\n   only OUR wrapper — :has keeps ChatGPT's own Radix poppers untouched —\n   and stay below the dialogs at 1000/1001. */\n[data-radix-popper-content-wrapper]:has(.ce-card) {\n    z-index: 999 !important;\n}\n\n[data-ce-theme=\"dark\"] .ce-card {\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);\n}\n\n.inputFieldSet {\n    display: block;\n    border-width: 2px;\n    border-style: groove;\n}\n\n.inputFieldSet legend {\n    margin-left: 4px;\n}\n\n.inputFieldSet input {\n    background-color: transparent;\n    box-shadow: none!important;\n}\n\n.row-half {\n    grid-column: auto / span 1;\n}\n\n.row-full {\n    grid-column: auto / span 2;\n}\n\n.dropdown-backdrop {\n    display: block;\n    position: fixed;\n    top: 0;\n    bottom: 0;\n    left: 0;\n    right: 0;\n    background-color: rgba(0,0,0,.5);\n    animation-name: pointerFadeIn;\n    animation-duration: .3s;\n}\n\n@keyframes fadeIn {\n    from {\n        opacity: 0;\n    }\n    to {\n        opacity: 1;\n    }\n}\n\n@keyframes slideUp {\n    from {\n        transform: translateY(100%);\n    }\n    to {\n        transform: translateY(0);\n    }\n}\n\n@keyframes pointerFadeIn {\n    from {\n        opacity: 0;\n        pointer-events: none;\n    }\n    to {\n        opacity: 1;\n        pointer-events: auto;\n    }\n}\n\n@keyframes rotate {\n    from {\n        transform: rotate(0deg);\n    }\n    to {\n        transform: rotate(360deg);\n    }\n}\n\n@keyframes circularDash {\n    0% {\n        stroke-dasharray: 1px, 200px;\n        stroke-dashoffset: 0;\n    }\n    50% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -15px;\n    }\n    100% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -125px;\n    }\n}\n");
-	_css(".DialogOverlay {\n    background-color: rgba(0, 0, 0, 0.44);\n    position: fixed;\n    inset: 0;\n    z-index: 1000;\n    animation: fadeIn 150ms cubic-bezier(0.16, 1, 0.3, 1);\n}\n\n.DialogContent {\n    background-color: #f3f3f3;\n    border-radius: 6px;\n    box-shadow: hsl(206 22% 7% / 35%) 0px 10px 38px -10px, hsl(206 22% 7% / 20%) 0px 10px 20px -15px;\n    position: fixed;\n    top: 50%;\n    left: 50%;\n    transform: translate(-50%, -50%);\n    width: 90vw;\n    max-width: 560px;\n    max-height: 85vh;\n    overflow: hidden;\n    padding: 16px 24px;\n    z-index: 1001;\n    outline: none;\n    animation: contentShow 150ms cubic-bezier(0.16, 1, 0.3, 1);\n    display: flex;\n    flex-direction: column;\n}\n\n[data-ce-theme=\"dark\"] .DialogContent {\n    background-color: #2a2a2a;\n    border-color: #40414f;\n    border-width: 1px;\n}\n\n.DialogContent._export {\n    background-color: #ffffff;\n}\n\n[data-ce-theme=\"dark\"] .DialogContent._export {\n    background-color: #2a2a2a;\n}\n\n.DialogContent input[type=\"checkbox\"] {\n    border: none;\n    outline: none;\n    box-shadow: none;\n}\n\n.DialogTitle {\n    margin: 0 0 16px 0;\n    font-weight: 500;\n    color: #1a1523;\n    font-size: 20px;\n    flex-shrink: 0;\n}\n\n.DialogBody {\n    flex: 1;\n    min-height: 0;\n    overflow-y: auto;\n    overflow-x: hidden;\n}\n\n[data-ce-theme=\"dark\"] .DialogTitle {\n    color: #fff;\n}\n\n.Button {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    border-radius: 4px;\n    padding: 0 15px;\n    font-size: 15px;\n    line-height: 1;\n    height: 35px;\n}\n.Button.green {\n    background-color: #ddf3e4;\n    color: #18794e;\n}\n.Button.red {\n    background-color: #f9d9d9;\n    color: #a71d2a;\n}\n.Button.neutral {\n    background-color: transparent;\n    color: #6f6e77;\n    border: 1px solid #6f6e77;\n    font-size: 13px;\n    height: 26px;\n    padding: 0 8px;\n}\n.Button.green:hover {\n    background-color: #ccebd7;\n}\n.Button.neutral:hover {\n    background-color: rgba(111, 110, 119, 0.1);\n}\n[data-ce-theme=\"dark\"] .Button.neutral {\n    color: #a0a0a8;\n    border-color: #a0a0a8;\n}\n[data-ce-theme=\"dark\"] .Button.neutral:hover {\n    background-color: rgba(160, 160, 168, 0.1);\n}\n.Button:disabled {\n    opacity: 0.5;\n    color: #6f6e77;\n    background-color: #e0e0e0;\n    cursor: not-allowed;\n}\n.Button:disabled:hover {\n    background-color: #e0e0e0;\n}\n\n.IconButton {\n    font-family: inherit;\n    border-radius: 100%;\n    height: 25px;\n    width: 25px;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    color: #6f6e77;\n}\n.IconButton:hover {\n    background-color: rgba(0, 0, 0, 0.06);\n}\n\n.CloseButton {\n    position: absolute;\n    top: 10px;\n    right: 10px;\n}\n\n.Fieldset {\n    display: flex;\n    gap: 20px;\n    align-items: center;\n    margin-bottom: 15px;\n}\n\n.Label {\n    font-size: 15px;\n    color: #1a1523;\n    min-width: 90px;\n    text-align: right;\n}\n\n[data-ce-theme=\"dark\"] .Label {\n    color: #fff;\n}\n\n.Input {\n    width: 100%;\n    flex: 1;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    border-radius: 4px;\n    padding: 0 10px;\n    font-size: 15px;\n    line-height: 1;\n    color: #000;\n    background-color: #fafafa;\n    box-shadow: 0 0 0 1px #6f6e77;\n    height: 35px;\n    outline: none;\n}\n\n[data-ce-theme=\"dark\"] .Input {\n    background-color: #2f2f2f;\n    color: #fff;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\n.Description {\n    font-size: 13px;\n    color: #5a5865;\n    text-align: right;\n    margin-bottom: 4px;\n}\n\n[data-ce-theme=\"dark\"] .Description {\n    color: #bcbcbc;\n}\n\n.SelectSearch {\n    width: 100%;\n    padding: 8px 16px;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    border-radius: 4px 4px 0 0;\n    background-color: transparent;\n    color: inherit;\n    font-size: 14px;\n    outline: none;\n    flex-shrink: 0;\n}\n.SelectSearch::placeholder {\n    color: #9ca3af;\n}\n\n.SelectToolbar {\n    display: flex;\n    align-items: center;\n    /* Minimum breathing room between the select-all label and the right\n       group once the ml-auto margin collapses under pressure */\n    gap: 12px;\n    padding: 12px 16px;\n    border-radius: 0;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    flex-shrink: 0;\n}\n\n/* CJK labels wrap per-character when the row is squeezed — never shrink it */\n.SelectToolbar .CheckBoxLabel {\n    white-space: nowrap;\n    flex-shrink: 0;\n}\n\n.ProjectSelect .Select {\n    width: auto;\n}\n\n.SelectList {\n    position: relative;\n    width: 100%;\n    flex: 1;\n    min-height: 120px;\n    padding: 12px 16px;\n    overflow-x: hidden;\n    overflow-y: auto;\n    border: 1px solid #6f6e77;\n    border-radius: 0 0 4px 4px;\n    white-space: nowrap;\n}\n\n.SelectItem {\n    display: flex;\n    align-items: center;\n    gap: 6px;\n    overflow: hidden;\n}\n\n.SelectItem .CheckBoxLabel {\n    flex: 1;\n    min-width: 0;\n}\n\n.SelectItem .LabelText {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.SelectItem label, .SelectItem input {\n    cursor: pointer;\n}\n\n.SelectItem span {\n    vertical-align: middle;\n}\n\n.SelectItemMeta {\n    flex-shrink: 0;\n    font-size: 0.7rem;\n    color: #9ca3af;\n    white-space: nowrap;\n    font-variant-numeric: tabular-nums;\n    min-width: 6.5rem;\n    text-align: right;\n}\n.SelectItemMetaActive {\n    color: #6b7280;\n    font-weight: 600;\n}\n[data-ce-theme=\"dark\"] {\n    .SelectItemMetaActive { color: #d1d5db; }\n}\n\n/* ── Sortable column header row ── */\n.SelectListHeader {\n    display: flex;\n    align-items: center;\n    padding: 0 16px;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    background: #f9fafb;\n    user-select: none;\n    flex-shrink: 0;\n}\n\n[data-ce-theme=\"dark\"] {\n    .SelectListHeader { background: #1f2937; }\n}\n\n.SelectListHeaderCell {\n    flex-shrink: 0;\n    font-size: 0.68rem;\n    font-weight: 600;\n    color: #9ca3af;\n    letter-spacing: 0.03em;\n    text-transform: uppercase;\n    background: transparent;\n    border: none;\n    padding: 5px 4px;\n    cursor: pointer;\n    white-space: nowrap;\n    min-width: 6.5rem;\n    text-align: right;\n}\n.SelectListHeaderCell:hover { color: #374151; }\n[data-ce-theme=\"dark\"] {\n    .SelectListHeaderCell:hover { color: #e5e7eb; }\n}\n.SelectListHeaderCellTitle {\n    flex: 1;\n    text-align: left;\n    padding-left: 28px; /* align with checkbox label */\n}\n.SelectListHeaderCellActive {\n    color: #2563eb;\n}\n[data-ce-theme=\"dark\"] {\n    .SelectListHeaderCellActive { color: #60a5fa; }\n}\n\n\n@media (max-width: 480px) {\n    .DialogContent { max-height: 90vh; }\n    .SelectListHeaderCell:last-child { display: none; }\n    .SelectItemMeta:last-child { display: none; }\n    .ActionBar { justify-content: flex-end; }\n    .ActionBar > .Select { width: 100%; }\n    .ActionBar > .flex-grow { display: none; }\n}\n\n@keyframes contentShow {\n    from {\n        opacity: 0;\n        transform: translate(-50%, -48%) scale(0.96);\n    }\n    to {\n        opacity: 1;\n        transform: translate(-50%, -50%) scale(1);\n    }\n}\n");
+	_css(".ce-timestamp {\n    color: var(--color-text-tertiary, var(--text-tertiary, #8f8f8f));\n}\n\nspan[data-time-format] {\n    display: none;\n}\n\nbody[data-time-format=\"12\"] span[data-time-format=\"12\"] {\n    display: inline;\n}\n\nbody[data-time-format=\"24\"] span[data-time-format=\"24\"] {\n    display: inline;\n}\n\n.Select {\n    padding: 0 2rem 0 0.5rem;\n    width: auto;\n    min-width: 7.5rem;\n    border-radius: 4px;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Select {\n    background-color: #2f2f2f;\n    color: #fff;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\nhtml {\n    --ce-text-primary: var(--color-text-primary, var(--text-primary, #0d0d0d));\n    --ce-menu-primary: #ffffff;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #ececec);\n    --ce-border-light: #0d0d0d26;\n    --ce-hover: var(--color-token-list-hover-background, rgba(0, 0, 0, .05));\n}\n\n:is(.dark, [data-theme=\"dark\"]) {\n    --ce-text-primary: var(--color-text-primary, var(--text-primary, #ececec));\n    --ce-menu-primary: #2A2A2A;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #212121);\n    --ce-border-light: var(--color-token-border-default, var(--border-default, rgba(255, 255, 255, .15)));\n    --ce-hover: var(--color-token-list-hover-background, rgba(255, 255, 255, .1));\n}\n\n/* Define our own background in both themes — this used to lean on\n   ChatGPT's bg-menu utility class, which no longer paints one */\n.bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n.border-menu {\n    border-color: var(--ce-border-light);\n}\n\n.menu-item {\n    height: 46px;\n}\n\n.menu-item[disabled] {\n    filter: brightness(0.5);\n}\n\n.ce-nav-trigger {\n    min-width: 0;\n    border: 0;\n    color: var(--ce-text-primary);\n}\n\n.ce-nav-trigger .ce-menu-item-text {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.ce-nav-trigger-collapsed {\n    width: 32px;\n    height: 32px;\n    margin: 0 auto 0.5rem;\n    padding: 0;\n    justify-content: center;\n    gap: 0;\n    border-radius: 8px;\n    color: var(--color-text-secondary, var(--text-secondary, var(--ce-text-primary)));\n}\n\n/* ChatGPT no longer ships the `hoverable` styles these items relied on. */\n.menu-item.hoverable:not([disabled]):hover,\n.ce-nav-trigger-collapsed:hover {\n    background-color: var(--ce-hover);\n}\n\n.ce-nav-trigger-collapsed .ce-menu-item-text {\n    display: none;\n}\n\n.ce-card {\n    color: var(--ce-text-primary);\n    border-radius: 1rem;\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);\n}\n\n.ce-card .menu-item {\n    column-gap: 8px;\n    padding-inline-start: 8px;\n}\n\n/* ChatGPT's main column carries its own z-index, which beats the menu's\n   portalled Radix popper wrapper (position: fixed, z-index: auto). Raise\n   only OUR wrapper — :has keeps ChatGPT's own Radix poppers untouched —\n   and stay below the dialogs at 1000/1001. */\n[data-radix-popper-content-wrapper]:has(.ce-card) {\n    z-index: 999 !important;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .ce-card {\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);\n}\n\n.inputFieldSet {\n    display: block;\n    border-width: 2px;\n    border-style: groove;\n}\n\n.inputFieldSet legend {\n    margin-left: 4px;\n}\n\n.inputFieldSet input {\n    background-color: transparent;\n    box-shadow: none!important;\n}\n\n.row-half {\n    grid-column: auto / span 1;\n}\n\n.row-full {\n    grid-column: auto / span 2;\n}\n\n.dropdown-backdrop {\n    display: block;\n    position: fixed;\n    top: 0;\n    bottom: 0;\n    left: 0;\n    right: 0;\n    background-color: rgba(0,0,0,.5);\n    animation-name: pointerFadeIn;\n    animation-duration: .3s;\n}\n\n@keyframes fadeIn {\n    from {\n        opacity: 0;\n    }\n    to {\n        opacity: 1;\n    }\n}\n\n@keyframes slideUp {\n    from {\n        transform: translateY(100%);\n    }\n    to {\n        transform: translateY(0);\n    }\n}\n\n@keyframes pointerFadeIn {\n    from {\n        opacity: 0;\n        pointer-events: none;\n    }\n    to {\n        opacity: 1;\n        pointer-events: auto;\n    }\n}\n\n@keyframes rotate {\n    from {\n        transform: rotate(0deg);\n    }\n    to {\n        transform: rotate(360deg);\n    }\n}\n\n@keyframes circularDash {\n    0% {\n        stroke-dasharray: 1px, 200px;\n        stroke-dashoffset: 0;\n    }\n    50% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -15px;\n    }\n    100% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -125px;\n    }\n}\n");
+	_css(".DialogOverlay {\n    background-color: rgba(0, 0, 0, 0.44);\n    position: fixed;\n    inset: 0;\n    z-index: 1000;\n    animation: fadeIn 150ms cubic-bezier(0.16, 1, 0.3, 1);\n}\n\n.DialogContent {\n    color: var(--ce-text-primary);\n    background-color: #f3f3f3;\n    border-radius: 6px;\n    box-shadow: hsl(206 22% 7% / 35%) 0px 10px 38px -10px, hsl(206 22% 7% / 20%) 0px 10px 20px -15px;\n    position: fixed;\n    top: 50%;\n    left: 50%;\n    transform: translate(-50%, -50%);\n    width: 90vw;\n    max-width: 560px;\n    max-height: 85vh;\n    overflow: hidden;\n    padding: 16px 24px;\n    z-index: 1001;\n    outline: none;\n    animation: contentShow 150ms cubic-bezier(0.16, 1, 0.3, 1);\n    display: flex;\n    flex-direction: column;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .DialogContent {\n    background-color: #2a2a2a;\n    border-color: #40414f;\n    border-width: 1px;\n}\n\n.DialogContent._export {\n    background-color: #ffffff;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .DialogContent._export {\n    background-color: #2a2a2a;\n}\n\n.DialogContent input[type=\"checkbox\"] {\n    border: none;\n    outline: none;\n    box-shadow: none;\n}\n\n.DialogTitle {\n    margin: 0 0 16px 0;\n    font-weight: 500;\n    color: #1a1523;\n    font-size: 20px;\n    flex-shrink: 0;\n}\n\n.DialogBody {\n    flex: 1;\n    min-height: 0;\n    overflow-y: auto;\n    overflow-x: hidden;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .DialogTitle {\n    color: #fff;\n}\n\n.Button {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    border-radius: 4px;\n    padding: 0 15px;\n    font-size: 15px;\n    line-height: 1;\n    height: 35px;\n}\n.Button.green {\n    background-color: #ddf3e4;\n    color: #18794e;\n}\n.Button.red {\n    background-color: #f9d9d9;\n    color: #a71d2a;\n}\n.Button.neutral {\n    background-color: transparent;\n    color: #6f6e77;\n    border: 1px solid #6f6e77;\n    font-size: 13px;\n    height: 26px;\n    padding: 0 8px;\n}\n.Button.green:hover {\n    background-color: #ccebd7;\n}\n.Button.neutral:hover {\n    background-color: rgba(111, 110, 119, 0.1);\n}\n:is(.dark, [data-theme=\"dark\"]) .Button.neutral {\n    color: #a0a0a8;\n    border-color: #a0a0a8;\n}\n:is(.dark, [data-theme=\"dark\"]) .Button.neutral:hover {\n    background-color: rgba(160, 160, 168, 0.1);\n}\n.Button:disabled {\n    opacity: 0.5;\n    color: #6f6e77;\n    background-color: #e0e0e0;\n    cursor: not-allowed;\n}\n.Button:disabled:hover {\n    background-color: #e0e0e0;\n}\n\n.IconButton {\n    font-family: inherit;\n    border-radius: 100%;\n    height: 25px;\n    width: 25px;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    color: #6f6e77;\n}\n.IconButton:hover {\n    background-color: rgba(0, 0, 0, 0.06);\n}\n\n.CloseButton {\n    position: absolute;\n    top: 10px;\n    right: 10px;\n}\n\n.Fieldset {\n    display: flex;\n    gap: 20px;\n    align-items: center;\n    margin-bottom: 15px;\n}\n\n.Label {\n    font-size: 15px;\n    color: #1a1523;\n    min-width: 90px;\n    text-align: right;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Label {\n    color: #fff;\n}\n\n.Input {\n    width: 100%;\n    flex: 1;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    border-radius: 4px;\n    padding: 0 10px;\n    font-size: 15px;\n    line-height: 1;\n    color: #000;\n    background-color: #fafafa;\n    box-shadow: 0 0 0 1px #6f6e77;\n    height: 35px;\n    outline: none;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Input {\n    background-color: #2f2f2f;\n    color: #fff;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\n.Description {\n    font-size: 13px;\n    color: #5a5865;\n    text-align: right;\n    margin-bottom: 4px;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Description {\n    color: #bcbcbc;\n}\n\n.SelectSearch {\n    width: 100%;\n    padding: 8px 16px;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    border-radius: 4px 4px 0 0;\n    background-color: transparent;\n    color: inherit;\n    font-size: 14px;\n    outline: none;\n    flex-shrink: 0;\n}\n.SelectSearch::placeholder {\n    color: #9ca3af;\n}\n\n.SelectToolbar {\n    display: flex;\n    align-items: center;\n    /* Minimum breathing room between the select-all label and the right\n       group once the ml-auto margin collapses under pressure */\n    gap: 12px;\n    padding: 12px 16px;\n    border-radius: 0;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    flex-shrink: 0;\n}\n\n/* CJK labels wrap per-character when the row is squeezed — never shrink it */\n.SelectToolbar .CheckBoxLabel {\n    white-space: nowrap;\n    flex-shrink: 0;\n}\n\n.ProjectSelect .Select {\n    width: auto;\n}\n\n.SelectList {\n    position: relative;\n    width: 100%;\n    flex: 1;\n    min-height: 120px;\n    padding: 12px 16px;\n    overflow-x: hidden;\n    overflow-y: auto;\n    border: 1px solid #6f6e77;\n    border-radius: 0 0 4px 4px;\n    white-space: nowrap;\n}\n\n.SelectItem {\n    display: flex;\n    align-items: center;\n    gap: 6px;\n    overflow: hidden;\n}\n\n.SelectItem .CheckBoxLabel {\n    flex: 1;\n    min-width: 0;\n}\n\n.SelectItem .LabelText {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.SelectItem label, .SelectItem input {\n    cursor: pointer;\n}\n\n.SelectItem span {\n    vertical-align: middle;\n}\n\n.SelectItemMeta {\n    flex-shrink: 0;\n    font-size: 0.7rem;\n    color: #9ca3af;\n    white-space: nowrap;\n    font-variant-numeric: tabular-nums;\n    min-width: 6.5rem;\n    text-align: right;\n}\n.SelectItemMetaActive {\n    color: #6b7280;\n    font-weight: 600;\n}\n:is(.dark, [data-theme=\"dark\"]) {\n    .SelectItemMetaActive { color: #d1d5db; }\n}\n\n/* ── Sortable column header row ── */\n.SelectListHeader {\n    display: flex;\n    align-items: center;\n    padding: 0 16px;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    background: #f9fafb;\n    user-select: none;\n    flex-shrink: 0;\n}\n\n:is(.dark, [data-theme=\"dark\"]) {\n    .SelectListHeader { background: #1f2937; }\n}\n\n.SelectListHeaderCell {\n    flex-shrink: 0;\n    font-size: 0.68rem;\n    font-weight: 600;\n    color: #9ca3af;\n    letter-spacing: 0.03em;\n    text-transform: uppercase;\n    background: transparent;\n    border: none;\n    padding: 5px 4px;\n    cursor: pointer;\n    white-space: nowrap;\n    min-width: 6.5rem;\n    text-align: right;\n}\n.SelectListHeaderCell:hover { color: #374151; }\n:is(.dark, [data-theme=\"dark\"]) {\n    .SelectListHeaderCell:hover { color: #e5e7eb; }\n}\n.SelectListHeaderCellTitle {\n    flex: 1;\n    text-align: left;\n    padding-left: 28px; /* align with checkbox label */\n}\n.SelectListHeaderCellActive {\n    color: #2563eb;\n}\n:is(.dark, [data-theme=\"dark\"]) {\n    .SelectListHeaderCellActive { color: #60a5fa; }\n}\n\n\n@media (max-width: 480px) {\n    .DialogContent { max-height: 90vh; }\n    .SelectListHeaderCell:last-child { display: none; }\n    .SelectItemMeta:last-child { display: none; }\n    .ActionBar { justify-content: flex-end; }\n    .ActionBar > .Select { width: 100%; }\n    .ActionBar > .flex-grow { display: none; }\n}\n\n@keyframes contentShow {\n    from {\n        opacity: 0;\n        transform: translate(-50%, -48%) scale(0.96);\n    }\n    to {\n        opacity: 1;\n        transform: translate(-50%, -50%) scale(1);\n    }\n}\n");
 	function useCollapsedSidebar(container, isMobile) {
 		const [isCollapsed, setIsCollapsed] = h$4(false);
 		p$6(() => {
@@ -22644,198 +22945,30 @@
 	function Menu({ container }) {
 		return o$5(SettingProvider, { children: o$5(MenuInner, { container }) });
 	}
-	var MOUNT_ATTRIBUTE = "data-ce-mount";
-	var LEGACY_PROFILE_BUTTON_SELECTOR = "[data-testid=\"accounts-profile-button\"]";
+	_css(".animate-fadeIn  {\n    animation: fadeIn .3s;\n}\n\n.animate-slideUp  {\n    animation: slideUp .3s;\n}\n\n.bg-blue-600 {\n    background-color: rgb(28 100 242);\n}\n\n.hover\\:bg-gray-500\\/10:hover {\n    background-color: hsla(0, 0%, 61%, .1)\n}\n\n.border-\\[\\#6f6e77\\] {\n    border-color: #6f6e77;\n}\n\n.cursor-help {\n    cursor: help;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .dark\\:bg-white\\/5 {\n    background-color: rgb(255 255 255 / 5%);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .dark\\:text-gray-200 {\n    color: rgb(229 231 235 / 1);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .dark\\:text-gray-300 {\n    color: rgb(209 213 219 / 1);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .dark\\:border-gray-\\[\\#86858d\\] {\n    border-color: #86858d;\n}\n\n.gap-x-1 {\n    column-gap: 0.25rem;\n}\n\n.h-2\\.5 {\n    height: 0.625rem;\n}\n\n.h-4 {\n    height: 1rem;\n}\n\n.inline-flex {\n    display: inline-flex;\n}\n\n.items-center {\n    align-items: center;\n}\n\n.ml-3 {\n    margin-left: 0.75rem;\n}\n\n.ml-4 {\n    margin-left: 1rem;\n}\n\n.mr-8 {\n    margin-right: 2rem;\n}\n\n.pb-0 {\n    padding-bottom: 0;\n}\n\n.pr-8 {\n    padding-right: 2rem;\n}\n\n.right-4 {\n    right: 1rem;\n}\n\n.rounded-full {\n    border-radius: 9999px;\n}\n\n.select-all {\n    user-select: all!important;\n}\n\n.shrink-0 {\n    flex-shrink: 0;\n}\n\n.min-w-0 {\n    min-width: 0;\n}\n\n.space-y-6>:not([hidden])~:not([hidden]) {\n    --tw-space-y-reverse: 0;\n    margin-top: calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));\n    margin-bottom: calc(1.5rem * var(--tw-space-y-reverse));\n}\n\n.truncate {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.whitespace-nowrap {\n    white-space: nowrap;\n}\n\n@media (min-width:768px) {\n    /* md */\n}\n\n@media (min-width:1024px) {\n    .lg\\:mt-0 {\n        margin-top: 0;\n    }\n\n    .lg\\:top-8 {\n        top: 2rem;\n    }\n}\n\n\n.toggle-switch {\n    position: relative;\n    outline: none;\n    background-color: rgb(229 231 235);\n    border: 1px solid rgb(107 114 128);\n    border-radius: 9999px;\n    cursor: pointer;\n    height: 20px;\n    width: 32px;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .toggle-switch {\n    background-color: rgb(255 255 255 / 5%);\n    border-color: rgb(255 255 255 / 1);\n}\n\n/* ChatGPT's switches follow the accent chosen in Appearance. */\n.toggle-switch[data-state=\"checked\"] {\n    background-color: var(--color-chart-blue, #3a83f7);\n    border-color: var(--color-chart-blue, #3a83f7);\n}\n\n.toggle-switch-handle {\n    display: block;\n    background-color: rgb(255 255 255);\n    border-radius: 9999px;\n    height: 16px;\n    width: 16px;\n    transition: transform 0.1s;\n    will-change: transform;\n    transform: translateX(1px);\n}\n\n.toggle-switch-handle[data-state=\"checked\"] {\n    transform: translateX(14px);\n}\n\n.toggle-switch-handle:hover {\n    background-color: rgb(243 244 246);\n}\n\n.toggle-switch-label {\n    color: rgb(107 114 128);\n    margin-left: 0.75rem;\n    font-size: 0.875rem;\n    font-weight: 500;\n}\n\n.toggle-switch-label:hover {\n    color: rgb(71 85 105);\n}\n");
+	var PROFILE_BUTTON_SELECTOR = "[data-testid=\"accounts-profile-button\"]";
 	var SIDEBAR_SCROLL_SELECTOR = "[data-app-action-sidebar-scroll]";
-	var NAV_RAIL_SELECTOR = "[data-app-navigation-rail]";
-	var NAV_RAIL_FALLBACK_SELECTOR = "nav[aria-label], nav[role=\"navigation\"], aside nav";
-	var RAIL_MAX_WIDTH = 120;
-	var MENU_BUTTON_SELECTOR = "button[aria-haspopup=\"menu\"]";
-	function query(root, selector) {
-		try {
-			return Array.from(root.querySelectorAll(selector));
-		} catch {
-			return [];
-		}
-	}
-	function widthOf(element) {
-		const rect = typeof element.getBoundingClientRect === "function" ? element.getBoundingClientRect() : null;
-		if (!rect) return null;
-		return rect.width || null;
-	}
-	function preferRendered(elements) {
-		const rendered = elements.filter((element) => typeof element.getClientRects === "function" && element.getClientRects().length > 0);
-		return rendered.length > 0 ? rendered : elements;
-	}
-	function getNavMenuInsertionTarget(target) {
-		const wrapper = target.parentElement;
-		if (!wrapper || wrapper.children.length !== 1) return target;
-		return wrapper;
-	}
-	function tagMount(container, strategy) {
-		container.setAttribute(MOUNT_ATTRIBUTE, strategy);
-	}
-	function discoverLegacyProfileButton(root) {
-		return preferRendered(query(root, LEGACY_PROFILE_BUTTON_SELECTOR)).map((target) => ({
-			target,
-			strategy: "legacy-profile-button",
-			insert: (container) => {
-				tagMount(container, "legacy-profile-button");
-				getNavMenuInsertionTarget(target).before(container);
-			}
-		}));
-	}
-	function discoverLegacySidebarFooter(root) {
-		return query(root, SIDEBAR_SCROLL_SELECTOR).map((scrollRoot) => scrollRoot.nextElementSibling).filter((footer) => !!footer?.querySelector(MENU_BUTTON_SELECTOR)).map((target) => ({
-			target,
-			strategy: "legacy-sidebar-footer",
-			insert: (container) => {
-				tagMount(container, "legacy-sidebar-footer");
-				target.prepend(container);
-			}
-		}));
-	}
-	function discoverSidebarPanel(root) {
-		return preferRendered(query(root, SIDEBAR_SCROLL_SELECTOR)).map((scrollRoot) => {
-			const panel = scrollRoot.parentElement;
-			if (!panel) return null;
-			return {
-				target: scrollRoot,
-				strategy: "sidebar-panel",
-				insert: (container) => {
-					tagMount(container, "sidebar-panel");
-					panel.append(container);
-				}
-			};
-		}).filter((mount) => !!mount);
-	}
-	function discoverNavRail(root) {
-		const rails = query(root, NAV_RAIL_SELECTOR);
-		return preferRendered(rails.length > 0 ? rails : query(root, NAV_RAIL_FALLBACK_SELECTOR).filter((nav) => {
-			const width = widthOf(nav);
-			return width === null || width <= RAIL_MAX_WIDTH;
-		})).map((rail) => {
-			const clusters = Array.from(rail.children).filter((child) => !!child.querySelector(MENU_BUTTON_SELECTOR));
-			const host = clusters[clusters.length - 1] ?? rail;
-			return {
-				target: rail,
-				strategy: "nav-rail",
-				insert: (container) => {
-					tagMount(container, "nav-rail");
-					host.prepend(container);
-				}
-			};
-		});
-	}
-	var FLOATING_HOST_ID = "chatgpt-exporter-floating-root";
-	function discoverFloating(root) {
-		const doc = ownerDocument(root);
-		const body = doc?.body;
-		if (!body) return [];
-		return [{
-			target: body,
-			strategy: "floating",
-			insert: (container) => {
-				tagMount(container, "floating");
-				(doc.getElementById("chatgpt-exporter-floating-root") ?? (() => {
-					const element = doc.createElement("div");
-					element.id = "chatgpt-exporter-floating-root";
-					body.append(element);
-					return element;
-				})()).append(container);
-			}
-		}];
-	}
-	function ownerDocument(root) {
-		const candidate = root;
-		if (candidate.body && typeof candidate.createElement === "function") return candidate;
-		return candidate.ownerDocument ?? null;
-	}
-	var STRATEGIES = [
-		discoverLegacyProfileButton,
-		discoverLegacySidebarFooter,
-		discoverSidebarPanel,
-		discoverNavRail
-	];
-	function getNavMenuMounts(root = document, { allowFloating = true } = {}) {
-		for (const discover of STRATEGIES) {
-			const mounts = discover(root);
-			if (mounts.length > 0) return mounts;
-		}
-		return allowFloating ? discoverFloating(root) : [];
-	}
-	function cleanupFloatingHost(root = document) {
-		const host = ownerDocument(root)?.getElementById(FLOATING_HOST_ID);
-		if (host && host.children.length === 0) host.remove();
-	}
-	_css(".animate-fadeIn  {\n    animation: fadeIn .3s;\n}\n\n.animate-slideUp  {\n    animation: slideUp .3s;\n}\n\n.bg-blue-600 {\n    background-color: rgb(28 100 242);\n}\n\n.hover\\:bg-gray-500\\/10:hover {\n    background-color: hsla(0, 0%, 61%, .1)\n}\n\n.border-\\[\\#6f6e77\\] {\n    border-color: #6f6e77;\n}\n\n.cursor-help {\n    cursor: help;\n}\n\n[data-ce-theme=\"dark\"] .dark\\:bg-white\\/5 {\n    background-color: rgb(255 255 255 / 5%);\n}\n\n[data-ce-theme=\"dark\"] .dark\\:text-gray-200 {\n    color: rgb(229 231 235 / 1);\n}\n\n[data-ce-theme=\"dark\"] .dark\\:text-gray-300 {\n    color: rgb(209 213 219 / 1);\n}\n\n[data-ce-theme=\"dark\"] .dark\\:border-gray-\\[\\#86858d\\] {\n    border-color: #86858d;\n}\n\n.gap-x-1 {\n    column-gap: 0.25rem;\n}\n\n.h-2\\.5 {\n    height: 0.625rem;\n}\n\n.h-4 {\n    height: 1rem;\n}\n\n.inline-flex {\n    display: inline-flex;\n}\n\n.items-center {\n    align-items: center;\n}\n\n.ml-3 {\n    margin-left: 0.75rem;\n}\n\n.ml-4 {\n    margin-left: 1rem;\n}\n\n.mr-8 {\n    margin-right: 2rem;\n}\n\n.pb-0 {\n    padding-bottom: 0;\n}\n\n.pr-8 {\n    padding-right: 2rem;\n}\n\n.right-4 {\n    right: 1rem;\n}\n\n.rounded-full {\n    border-radius: 9999px;\n}\n\n.select-all {\n    user-select: all!important;\n}\n\n.shrink-0 {\n    flex-shrink: 0;\n}\n\n.min-w-0 {\n    min-width: 0;\n}\n\n.space-y-6>:not([hidden])~:not([hidden]) {\n    --tw-space-y-reverse: 0;\n    margin-top: calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));\n    margin-bottom: calc(1.5rem * var(--tw-space-y-reverse));\n}\n\n.truncate {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.whitespace-nowrap {\n    white-space: nowrap;\n}\n\n@media (min-width:768px) {\n    /* md */\n}\n\n@media (min-width:1024px) {\n    .lg\\:mt-0 {\n        margin-top: 0;\n    }\n\n    .lg\\:top-8 {\n        top: 2rem;\n    }\n}\n\n\n.toggle-switch {\n    position: relative;\n    outline: none;\n    background-color: rgb(229 231 235);\n    border: 1px solid rgb(107 114 128);\n    border-radius: 9999px;\n    cursor: pointer;\n    height: 20px;\n    width: 32px;\n}\n\n[data-ce-theme=\"dark\"] .toggle-switch {\n    background-color: rgb(255 255 255 / 5%);\n    border-color: rgb(255 255 255 / 1);\n}\n\n.toggle-switch[data-state=\"checked\"] {\n    background-color: rgb(0 0 0);\n    border-color: rgb(0 0 0);\n}\n\n[data-ce-theme=\"dark\"] .toggle-switch[data-state=\"checked\"] {\n    background-color: rgb(22 163 74);\n    border-color: rgb(22 163 74);\n}\n\n.toggle-switch-handle {\n    display: block;\n    background-color: rgb(255 255 255);\n    border-radius: 9999px;\n    height: 16px;\n    width: 16px;\n    transition: transform 0.1s;\n    will-change: transform;\n    transform: translateX(1px);\n}\n\n.toggle-switch-handle[data-state=\"checked\"] {\n    transform: translateX(14px);\n}\n\n.toggle-switch-handle:hover {\n    background-color: rgb(243 244 246);\n}\n\n.toggle-switch-label {\n    color: rgb(107 114 128);\n    margin-left: 0.75rem;\n    font-size: 0.875rem;\n    font-weight: 500;\n}\n\n.toggle-switch-label:hover {\n    color: rgb(71 85 105);\n}\n\n");
-	var SHELL_QUIET_MS = 400;
-	var SHELL_SETTLE_TIMEOUT_MS = 4e3;
-	function whenShellSettled(callback) {
-		const start = () => {
-			let quietTimer;
-			let capTimer;
-			let done = false;
-			const observer = new MutationObserver(() => {
-				clearTimeout(quietTimer);
-				quietTimer = setTimeout(finish, SHELL_QUIET_MS);
-			});
-			function finish() {
-				if (done) return;
-				done = true;
-				clearTimeout(quietTimer);
-				clearTimeout(capTimer);
-				observer.disconnect();
-				requestAnimationFrame(callback);
-			}
-			capTimer = setTimeout(finish, SHELL_SETTLE_TIMEOUT_MS);
-			quietTimer = setTimeout(finish, SHELL_QUIET_MS);
-			observer.observe(document.body, {
-				childList: true,
-				subtree: true
-			});
-		};
-		if (document.readyState === "complete") start();
-		else window.addEventListener("load", start, { once: true });
-	}
-	function createScheduler(run, minIntervalMs) {
-		let frame = 0;
-		let last = 0;
-		let timer;
-		return () => {
-			if (frame) return;
-			const wait = Math.max(0, minIntervalMs - (Date.now() - last));
-			clearTimeout(timer);
-			timer = setTimeout(() => {
-				frame = requestAnimationFrame(() => {
-					frame = 0;
-					last = Date.now();
-					run();
-				});
-			}, wait);
-		};
-	}
+	var AUTOMATIONS_SELECTOR = "[data-sidebar-destination=\"builtin:automations\"]";
+	var MESSAGE_UNIT_SELECTOR = "[data-chatgpt-conversation-selection-target] [data-chatgpt-search-message-ids]";
+	var RAIL_MENU_BUTTON_SELECTOR = "[data-app-navigation-rail] button[aria-haspopup=\"menu\"]";
 	main();
 	function main() {
 		watchTemporaryChatId();
 		onloadSafe(() => {
 			console.log("[Exporter] Loaded");
-			watchColorScheme();
 			const styleEl = document.createElement("style");
 			styleEl.id = "sentinel-css";
 			document.head.append(styleEl);
 			const injectionMap = new Map();
-			let hydrated = false;
-			const injectNavMenu = ({ target, insert, strategy }) => {
+			const injectNavMenu = ({ target, insert }) => {
 				if (injectionMap.has(target)) return;
-				console.log(`[Exporter] Injecting nav (${strategy})`, target);
+				console.log("[Exporter] Injecting nav", target);
 				const container = getMenuContainer();
 				injectionMap.set(target, container);
 				insert(container);
 			};
 			const syncNavMenu = () => {
-				if (!hydrated) return;
-				const mounts = getNavMenuMounts(document, { allowFloating: injectionMap.size > 0 || document.readyState === "complete" });
+				const mounts = getNavMenuMounts();
 				const activeTargets = new Set(mounts.map(({ target }) => target));
 				injectionMap.forEach((container, target) => {
 					if (!target.isConnected || !container.isConnected || !activeTargets.has(target)) {
@@ -22844,24 +22977,15 @@
 					}
 				});
 				mounts.forEach(injectNavMenu);
-				cleanupFloatingHost();
 			};
-			const scheduleSync = createScheduler(syncNavMenu, 150);
 			for (const selector of [
-				LEGACY_PROFILE_BUTTON_SELECTOR,
+				PROFILE_BUTTON_SELECTOR,
 				SIDEBAR_SCROLL_SELECTOR,
-				NAV_RAIL_SELECTOR
-			]) import_sentinel_umd.default.on(selector, scheduleSync);
-			const observer = new MutationObserver(scheduleSync);
-			whenShellSettled(() => {
-				hydrated = true;
-				syncNavMenu();
-				observer.observe(document.body, {
-					childList: true,
-					subtree: true
-				});
-			});
-			setInterval(scheduleSync, 5e3);
+				RAIL_MENU_BUTTON_SELECTOR,
+				AUTOMATIONS_SELECTOR
+			]) import_sentinel_umd.default.on(selector, syncNavMenu);
+			syncNavMenu();
+			setInterval(syncNavMenu, 1e3);
 			if (isSharePage()) import_sentinel_umd.default.on(`div[role="presentation"] > .w-full > div >.flex.w-full`, (target) => {
 				target.prepend(getMenuContainer());
 			});
@@ -22872,39 +22996,126 @@
 				if (!currentChatId || currentChatId === chatId) return;
 				chatId = currentChatId;
 				const { conversationNodes } = processConversation(await fetchConversation(chatId));
-				const threadContents = getConversationTurns(document).filter((turn) => turn.closest("main")).flatMap((turn) => Array.from(turn.querySelectorAll(anyOf(MESSAGE_SELECTORS))));
+				const threadContents = Array.from(document.querySelectorAll("main [data-testid^=\"conversation-turn-\"] [data-message-id]"));
 				if (threadContents.length === 0) return;
 				threadContents.forEach((thread, index) => {
 					const createTime = conversationNodes[index]?.message?.create_time;
 					if (!createTime) return;
-					const date = new Date(createTime * 1e3);
-					const timestamp = document.createElement("time");
-					timestamp.className = "w-full text-gray-500 dark:text-gray-400 text-sm text-right";
-					timestamp.dateTime = date.toISOString();
-					timestamp.title = date.toLocaleString();
-					const hour12 = document.createElement("span");
-					hour12.setAttribute("data-time-format", "12");
-					hour12.textContent = date.toLocaleTimeString("en-US", {
-						hour: "2-digit",
-						minute: "2-digit"
-					});
-					const hour24 = document.createElement("span");
-					hour24.setAttribute("data-time-format", "24");
-					hour24.textContent = date.toLocaleTimeString("en-US", {
-						hour: "2-digit",
-						minute: "2-digit",
-						hour12: false
-					});
-					timestamp.append(hour12, hour24);
-					thread.append(timestamp);
+					thread.append(createTimestamp(createTime));
 				});
 			});
+			watchMessageTimestamps();
 		});
+	}
+	function watchMessageTimestamps() {
+		let chatId = "";
+		let createTimes = Promise.resolve(new Map());
+		const missingIds = new Set();
+		const loadCreateTimes = async (id) => {
+			const conversation = await fetchConversation(id);
+			const times = new Map();
+			Object.values(conversation.mapping).forEach(({ message }) => {
+				if (message?.create_time) times.set(message.id, message.create_time);
+			});
+			return times;
+		};
+		const findCreateTime = (times, ids) => {
+			for (let i = ids.length - 1; i >= 0; i--) {
+				const time = times.get(ids[i]);
+				if (time) return time;
+			}
+			return null;
+		};
+		import_sentinel_umd.default.on(MESSAGE_UNIT_SELECTOR, async (unit) => {
+			if (isSharePage()) return;
+			if (unit.parentElement?.closest("[data-chatgpt-search-message-ids]")) return;
+			const currentChatId = getChatIdFromUrl();
+			if (!currentChatId) return;
+			if (currentChatId !== chatId) {
+				chatId = currentChatId;
+				missingIds.clear();
+				createTimes = loadCreateTimes(chatId).catch(() => new Map());
+			}
+			const ids = unit.getAttribute("data-chatgpt-search-message-ids")?.split(/\s+/).filter(Boolean) ?? [];
+			if (ids.length === 0) return;
+			let createTime = findCreateTime(await createTimes, ids);
+			if (!createTime && ids.some((id) => !missingIds.has(id)) && currentChatId === chatId) {
+				ids.forEach((id) => missingIds.add(id));
+				createTimes = loadCreateTimes(chatId).catch(() => new Map());
+				createTime = findCreateTime(await createTimes, ids);
+			}
+			if (!createTime || !unit.isConnected || unit.querySelector(":scope > time[data-ce-timestamp]")) return;
+			unit.append(createTimestamp(createTime));
+		});
+	}
+	function createTimestamp(createTime) {
+		const date = new Date(createTime * 1e3);
+		const timestamp = document.createElement("time");
+		timestamp.className = "ce-timestamp w-full text-sm text-right";
+		timestamp.setAttribute("data-ce-timestamp", "");
+		timestamp.dateTime = date.toISOString();
+		timestamp.title = date.toLocaleString();
+		const hour12 = document.createElement("span");
+		hour12.setAttribute("data-time-format", "12");
+		hour12.textContent = date.toLocaleTimeString("en-US", {
+			hour: "2-digit",
+			minute: "2-digit"
+		});
+		const hour24 = document.createElement("span");
+		hour24.setAttribute("data-time-format", "24");
+		hour24.textContent = date.toLocaleTimeString("en-US", {
+			hour: "2-digit",
+			minute: "2-digit",
+			hour12: false
+		});
+		timestamp.append(hour12, hour24);
+		return timestamp;
 	}
 	function getMenuContainer() {
 		const container = document.createElement("div");
 		container.style.zIndex = "99";
 		D$4(o$5(Menu, { container }), container);
 		return container;
+	}
+	function getNavMenuInsertionTarget(target) {
+		const wrapper = target.parentElement;
+		if (!wrapper || wrapper.children.length !== 1) return target;
+		return wrapper;
+	}
+	function getNavMenuMounts() {
+		const profileButtons = Array.from(document.querySelectorAll(PROFILE_BUTTON_SELECTOR));
+		if (profileButtons.length > 0) return profileButtons.map((target) => ({
+			target,
+			insert: (container) => getNavMenuInsertionTarget(target).before(container)
+		}));
+		const mounts = [];
+		Array.from(document.querySelectorAll(SIDEBAR_SCROLL_SELECTOR)).forEach((scrollRoot) => {
+			const footer = [scrollRoot.nextElementSibling, scrollRoot.parentElement?.nextElementSibling].find((el) => el?.querySelector("button[aria-haspopup=\"menu\"]"));
+			if (footer) mounts.push({
+				target: footer,
+				insert: (container) => {
+					Object.assign(container.style, {
+						paddingInline: "var(--padding-row-x)",
+						paddingTop: "8px"
+					});
+					footer.prepend(container);
+				}
+			});
+		});
+		const railMenuButton = document.querySelector(RAIL_MENU_BUTTON_SELECTOR);
+		const rail = railMenuButton?.closest("[data-app-navigation-rail]");
+		const railRow = rail && Array.from(rail.children).find((row) => row.contains(railMenuButton));
+		if (railMenuButton && railRow) mounts.push({
+			target: railMenuButton,
+			insert: (container) => {
+				container.style.pointerEvents = "auto";
+				railRow.before(container);
+			}
+		});
+		if (mounts.length > 0) return mounts;
+		return Array.from(document.querySelectorAll(AUTOMATIONS_SELECTOR)).map((target) => ({
+			target,
+			insert: (container) => getNavMenuInsertionTarget(target).before(container)
+		}));
 	}
 })(JSZip, window);

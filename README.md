@@ -8,9 +8,11 @@
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-source-3178c6?style=flat-square)](src/) [![MIT license](https://img.shields.io/badge/License-MIT-6ac9aa?style=flat-square)](LICENSE) [![Windows and macOS builds](https://img.shields.io/badge/Download-Windows%20%C2%B7%20macOS-6ac9aa?style=flat-square)](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/latest) [![Userscript](https://img.shields.io/badge/Install-Tampermonkey-59636e?style=flat-square)](#userscript-only)
 
-[Download](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/latest) · [Install this fork](#install-this-fork) · [Repair notes](#repair-notes) · [Formats](#-supported-formats) · [Examples](#-example) · [Batch export](#-export-multiple-conversations) · [Development](#development)
+[Download](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/latest) · [Install this fork](#install-this-fork) · [What this fork adds](#what-this-fork-adds) · [Formats](#-supported-formats) · [Examples](#-example) · [Batch export](#-export-multiple-conversations) · [Development](#development)
 
-This fork of [pionxzh/chatgpt-exporter](https://github.com/pionxzh/chatgpt-exporter) carries navigation, conversation-detection, and theme repairs for ChatGPT's changed interface. The userscript exports conversations as text, HTML, Markdown, PNG, or JSON; batch export also supports JSON ZIP.
+This fork of [pionxzh/chatgpt-exporter](https://github.com/pionxzh/chatgpt-exporter) tracks upstream **v2.36.2** and adds Windows and macOS installers for the userscript, plus upstream [PR #400](https://github.com/pionxzh/chatgpt-exporter/pull/400)'s conversation-list error handling. The userscript exports conversations as text, HTML, Markdown, PNG, or JSON; batch export also supports JSON ZIP.
+
+This fork previously carried its own navigation, conversation-detection and theme repairs. Upstream shipped equivalent fixes in v2.36.2, so those private versions were dropped rather than maintained in parallel — see [`docs/2.36.2-reconciliation.md`](docs/2.36.2-reconciliation.md).
 
 ## Install this fork
 
@@ -27,7 +29,7 @@ Windows and macOS builds are on the [**Releases page**](https://github.com/tyhal
 
 The desktop app is an **installer, not a ChatGPT client**. It carries a verified copy of the userscript, shows you its version and SHA-256, and hands it to your userscript manager — the exporter still runs as a userscript in your own browser. It reads no browser profile, cookie store or session.
 
-These builds are **not code-signed**, so macOS Gatekeeper and Windows SmartScreen will both ask before the first launch. Check your download against `SHA256SUMS.txt` on the release first.
+These builds are **not code-signed**, so macOS Gatekeeper and Windows SmartScreen will both ask before the first launch. Check your download against `SHA256SUMS.txt` on the release first. How signing gets turned on later is in [`docs/desktop-release-design.md`](docs/desktop-release-design.md); what the app itself does is in [`desktop/README.md`](desktop/README.md).
 
 ### Userscript only
 
@@ -39,24 +41,33 @@ Fully supported, and nothing about the desktop helper is required.
 4. In Tampermonkey, open **Dashboard → Utilities → Import from file** and choose the file.
 5. Reload ChatGPT. Look for **Export** in the sidebar or its icon in the collapsed rail.
 
-> **Which code is in the release?** The published artifacts are built from the [`review/reconcile-upstream-2.36.2`](https://github.com/tyhallcsu/chatgpt-exporter-fix/tree/review/reconcile-upstream-2.36.2) line — upstream v2.36.2 plus upstream [PR #400](https://github.com/pionxzh/chatgpt-exporter/pull/400), and nothing else. That line **supersedes the repairs on this branch**: upstream shipped its own fixes for them in 2.36.2, so the reconciliation dropped the private versions. Bringing it onto `master` is [PR #6](https://github.com/tyhallcsu/chatgpt-exporter-fix/pull/6), which is not merged yet. Until it is, `dist/chatgpt.user.js` on `master` is the older 2.36.1-era fork build, not what the release ships.
+> **Which code is in the release?** `master` is it. The artifacts published in [desktop-v2.36.2.1](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/tag/desktop-v2.36.2.1) are built from this source — upstream v2.36.2 plus upstream [PR #400](https://github.com/pionxzh/chatgpt-exporter/pull/400), and nothing else. The tracked [`dist/chatgpt.user.js`](dist/chatgpt.user.js) is the same bytes as the release's `chatgpt-exporter-2.36.2.user.js`, SHA-256 `9daa710bc102bb5dc62f574958581efd2029ea68cd5f6fb60ac7d3bfe8475f93`, reproduced independently on Ubuntu, macOS and Windows.
 
 The upstream GreasyFork and raw-GitHub links below install the upstream version, not this fork's builds.
 
-## Repair notes
+## What this fork adds
 
 | Area | Implementation / evidence |
 |---|---|
-| Sidebar, collapsed rail, and floating fallback | [Navigation mount strategies](src/utils/navMount.ts) |
-| Current and legacy conversation markup | [Thread selectors](src/utils/threadDom.ts) |
-| Theme handling | [Theme tests](tests/theme.test.ts) |
-| Investigation, installation, and known limitations | [Repair handoff](docs/2026-09-24-handoff.md) · [Findings](docs/2026-09-24-chatgpt-ui-repair-findings.md) |
+| Conversation-list errors surfaced in Export All | [`src/ui/ExportDialog.tsx`](src/ui/ExportDialog.tsx) · [tests](tests/export-dialog-list-load.test.tsx) |
+| Windows and macOS installers | [`desktop/`](desktop/) · [packaging design](docs/desktop-release-design.md) |
+| What was dropped, and why | [reconciliation notes](docs/2.36.2-reconciliation.md) · [upstream comparison](docs/upstream-comparison.md) |
+| What was verified, and how | [verification matrix](docs/verification-matrix.md) |
 
-The handoff records prior live-site verification. Very long PNG exports can exceed renderer limits; API rate limits can delay the conversation list. The examples and screenshots below are inherited upstream material, not new captures of this fork.
+Everything else is upstream v2.36.2 unmodified. The only source difference from
+upstream's `userscript-v2.36.2` tag is PR #400's error handling in `src/api.ts`
+and `src/ui/ExportDialog.tsx`, with its tests. Upstream merged PR #400 on
+2026-09-26; this fork carries it ahead of the upstream release that will contain
+it.
+
+Known limitations: very long PNG exports can exceed renderer limits, and API rate
+limits can delay the conversation list — which is what PR #400 makes visible
+instead of showing a silently short list. The examples and screenshots below are
+inherited upstream material, not new captures of this fork.
 
 ## Development
 
-Use the pinned **pnpm 8.14.1** and a Node version compatible with the checked-in dependencies (the package declares Node >=20). See [CONTRIBUTING.md](CONTRIBUTING.md) and the [repair handoff](docs/2026-09-24-handoff.md) for setup details.
+Use the pinned **pnpm 8.14.1** and a Node version compatible with the checked-in dependencies (the package declares Node >=20). See [CONTRIBUTING.md](CONTRIBUTING.md) for setup details, and [`docs/2.36.2-reconciliation.md`](docs/2.36.2-reconciliation.md) for how this branch relates to upstream.
 
 ```bash
 pnpm install --frozen-lockfile

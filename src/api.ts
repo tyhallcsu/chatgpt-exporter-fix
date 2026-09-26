@@ -102,6 +102,13 @@ interface CiteMetadata {
     }>
 }
 
+interface MessageAttachment {
+    id: string
+    name: string
+    mime_type?: string
+    size?: number
+}
+
 interface MessageMeta {
     aggregate_result?: {
         code: string
@@ -136,6 +143,8 @@ interface MessageMeta {
     _cite_metadata?: CiteMetadata
     /** New-style content references for web search citations */
     content_references?: ContentReference[]
+    /** Files the user uploaded with this message */
+    attachments?: MessageAttachment[]
     /** Whether this message is hidden in the UI (e.g., internal system prompts) */
     is_visually_hidden_from_conversation?: boolean
     /** Whether this assistant message is a transient thinking preamble hidden from the final conversation */
@@ -726,12 +735,18 @@ export async function deleteConversation(chatId: string): Promise<boolean> {
 export class RateLimitError extends Error {
     /** Milliseconds to wait before retrying */
     readonly retryAfterMs: number
+    /**
+     * Whether `retryAfterMs` is the wait the server asked for, or our own
+     * fallback. Only the former may be quoted to the user as the API's answer.
+     */
+    readonly retryAfterFromServer: boolean
     constructor(retryAfterHeader: string | null) {
         super('Too Many Requests (429)')
         this.name = 'RateLimitError'
         const secs = retryAfterHeader != null ? Number.parseInt(retryAfterHeader, 10) : Number.NaN
+        this.retryAfterFromServer = Number.isFinite(secs) && secs > 0
         // Default to 30 s if the header is missing or unparseable
-        this.retryAfterMs = Number.isFinite(secs) && secs > 0 ? secs * 1000 : 30_000
+        this.retryAfterMs = this.retryAfterFromServer ? secs * 1000 : 30_000
     }
 }
 
@@ -880,6 +895,17 @@ export interface ConversationResult {
     conversationNodes: ConversationNode[]
     projectName?: string
     projectId?: string
+}
+
+/**
+ * Names of the files uploaded with a message. Their content lives in hidden
+ * tool messages, which exports skip. Images are left out, they already show
+ * as image parts of the message.
+ */
+export function getFileAttachmentNames(message: ConversationNodeMessage): string[] {
+    return (message.metadata?.attachments ?? [])
+        .filter(attachment => attachment.name && !attachment.mime_type?.startsWith('image/'))
+        .map(attachment => attachment.name)
 }
 
 export function shouldSkipMessageInExport(message?: ConversationNodeMessage): boolean {

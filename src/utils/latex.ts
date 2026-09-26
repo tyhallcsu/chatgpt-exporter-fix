@@ -14,9 +14,10 @@ const MathRegex = new RegExp([
 
 /**
  * Convert math to `$` delimiters and swap it for placeholders, so a markdown
- * round trip does not escape it. `restore` puts the formulas back.
+ * round trip does not escape it. `restore` puts the formulas back, passed
+ * through `escape` when the output is HTML.
  */
-export function protectMath(input: string): { text: string, restore: (text: string) => string } {
+export function protectMath(input: string): { text: string, restore: (text: string, escape?: (formula: string) => string) => string } {
     const formulas: string[] = []
     const placeholder = (formula: string) => `╬${formulas.push(formula) - 1}╬`
 
@@ -35,6 +36,20 @@ export function protectMath(input: string): { text: string, restore: (text: stri
         })
     }).join('')
 
-    const restore = (output: string) => output.replace(/╬(\d+)╬/g, (match, index: string) => formulas[Number(index)] ?? match)
+    const restore = (output: string, escape = (formula: string) => formula) => output.replace(/╬(\d+)╬/g, (match, index: string) => {
+        const formula = formulas[Number(index)]
+        return formula == null ? match : escape(formula)
+    })
     return { text, restore }
+}
+
+/**
+ * Rewrite a formula from `protectMath` with `\( \)` or `\[ \]` delimiters.
+ * The HTML export only renders those, so a `$` in plain text, such as a
+ * price, is not taken for math.
+ */
+export function toBracketDelimiters(formula: string): string {
+    const display = /^\$\$([\s\S]*)\$\$$/.exec(formula)
+    if (display) return `\\[${display[1]}\\]`
+    return `\\(${formula.slice(1, -1)}\\)`
 }

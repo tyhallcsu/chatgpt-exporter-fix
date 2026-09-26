@@ -1,0 +1,33 @@
+[package]
+name = "chatgpt-exporter-desktop"
+version = "2.36.2"
+description = "Hands the ChatGPT Exporter userscript to your browser's userscript manager."
+authors = ["Tyler Hall Tech LLC"]
+license = "MIT"
+repository = "https://github.com/tyhallcsu/chatgpt-exporter-fix"
+edition = "2021"
+rust-version = "1.82"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[features]
+# Used by production builds and by `tauri build`. Do not remove.
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+# `panic = "abort"` would shave a little more off the binary, but it also makes
+# `cargo test --release` impossible. Running the tests in the release profile
+# lets them reuse the dependencies the bundle already compiled, which is worth
+# far more than the bytes: it saves a whole second compile of the Tauri tree.

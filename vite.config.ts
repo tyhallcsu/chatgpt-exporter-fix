@@ -3,6 +3,35 @@ import { defineConfig } from 'vite'
 import monkey, { cdn } from 'vite-plugin-monkey'
 import packageJson from './package.json' with { type: 'json' }
 
+/**
+ * Review builds. `REVIEW_BUILD_ID` is the short SHA of the source commit the
+ * artifact is built from; the commit that *records* the artifact is its child.
+ * Set it and the build becomes unmistakably not an official release:
+ * a distinct `@name`, a semver-prerelease `@version`, its own filename, and
+ * `@updateURL`/`@downloadURL` of `none` so the manager cannot auto-update it.
+ * Authorship, namespace and licence stay pionxzh's.
+ *
+ * `REVIEW_BUILD_SEQ` is the commit count, and it leads the prerelease so the
+ * version stays monotonic. A bare SHA does not: semver compares alphanumeric
+ * prerelease identifiers lexically, so Tampermonkey offered `…-review.07f7498`
+ * as a *downgrade* from `…-review.70ad156`. The count is a numeric identifier,
+ * compares numerically, and is still reproducible from the commit alone.
+ */
+const reviewBuildId = process.env.REVIEW_BUILD_ID?.trim() || ''
+const reviewBuildSeq = process.env.REVIEW_BUILD_SEQ?.trim() || '0'
+const isReviewBuild = reviewBuildId.length > 0
+const reviewSuffix = ' (review build)'
+
+function title(base: string) {
+    return isReviewBuild ? `${base}${reviewSuffix}` : base
+}
+
+function describe(base: string) {
+    return isReviewBuild
+        ? `[REVIEW BUILD ${reviewBuildId} — unreleased, for local review only] ${base}`
+        : base
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [
@@ -14,16 +43,20 @@ export default defineConfig({
             entry: 'src/main.tsx',
             userscript: {
                 'name': {
-                    '': packageJson.title,
-                    'zh-CN': packageJson['title:zh-CN'],
-                    'zh-TW': packageJson['title:zh-TW'],
+                    '': title(packageJson.title),
+                    'zh-CN': title(packageJson['title:zh-CN']),
+                    'zh-TW': title(packageJson['title:zh-TW']),
                 },
+                // Semver prerelease: sorts below 2.36.1, and names the source commit.
+                'version': isReviewBuild
+                    ? `${packageJson.version}-review.${reviewBuildSeq}.${reviewBuildId}`
+                    : packageJson.version,
                 'author': packageJson.author,
                 'namespace': packageJson.author,
                 'description': {
-                    '': packageJson.description,
-                    'zh-CN': packageJson['description:zh-CN'],
-                    'zh-TW': packageJson['description:zh-TW'],
+                    '': describe(packageJson.description),
+                    'zh-CN': describe(packageJson['description:zh-CN']),
+                    'zh-TW': describe(packageJson['description:zh-TW']),
                 },
                 'license': packageJson.license,
                 'match': [
@@ -53,9 +86,13 @@ export default defineConfig({
                 ],
                 'icon': 'https://chatgpt.com/favicon.ico',
                 'run-at': 'document-end',
+                // `none` is Tampermonkey's explicit opt-out. Absent headers only
+                // mean "unspecified"; this states it. Verify the effect in the
+                // manager's per-script settings, not from the header alone.
+                ...(isReviewBuild ? { updateURL: 'none', downloadURL: 'none' } : {}),
             },
             build: {
-                fileName: 'chatgpt.user.js',
+                fileName: isReviewBuild ? 'chatgpt-exporter-review.user.js' : 'chatgpt.user.js',
                 externalGlobals: [
                     ['jszip', cdn.jsdelivr('JSZip', 'dist/jszip.min.js')],
                     // SnapDOM's IIFE exposes its named export as window.snapdom.
@@ -79,5 +116,8 @@ export default defineConfig({
     ],
     build: {
         cssMinify: false,
+        // A review build writes a second file into dist/; emptying the directory
+        // would delete the tracked `chatgpt.user.js` next to it.
+        emptyOutDir: !isReviewBuild,
     },
 })

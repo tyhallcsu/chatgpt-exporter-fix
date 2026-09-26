@@ -1,0 +1,175 @@
+// CDP helpers for the *userscript-manager* Chrome — a persistent profile with a
+// real Tampermonkey install, as opposed to cdp.mjs's GM-shim harness.
+//
+// Configure with:
+//   MANAGER_CDP_PORT   CDP port                (default 9333)
+//   MANAGER_PROFILE    Chrome --user-data-dir  (default ~/.chrome-chatgpt-exporter-test)
+//   CHROME_BIN         Chrome binary           (default macOS path)
+//   TM_EXTENSION_ID    Tampermonkey's id       (default the Web Store id)
+// Needs Node 22+ for the global WebSocket.
+
+import os from 'node:os'
+import path from 'node:path'
+
+export const CDP_PORT = Number(process.env.MANAGER_CDP_PORT || 9333)
+export const PROFILE = process.env.MANAGER_PROFILE || path.join(os.homedir(), '.chrome-chatgpt-exporter-test')
+export const CHROME_BIN = process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+export const TM_ID = process.env.TM_EXTENSION_ID || 'dhdgffkkebhmkfjojejmpbldmpobfkfo'
+
+const base = `http://127.0.0.1:${CDP_PORT}`
+
+export const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+export async function browserVersion() {
+    const r = await fetch(`${base}/json/version`)
+    return r.json()
+}
+
+export async function targets() {
+    return (await fetch(`${base}/json/list`)).json()
+}
+
+/**
+ * Open a tab and return a target that is ready to attach to. Chrome sometimes
+ * answers `/json/new` before the target has a `webSocketDebuggerUrl`, so the
+ * entry is re-read from the target list until one appears.
+ */
+export async function openTab(url) {
+    const created = await (await fetch(`${base}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' })).json()
+    if (created.webSocketDebuggerUrl) return created
+    for (let attempt = 0; attempt < 20; attempt++) {
+        await sleep(250)
+        const found = (await targets()).find(t => t.id === created.id && t.webSocketDebuggerUrl)
+        if (found) return found
+    }
+    throw new Error(`tab ${created.id} never exposed a debugger URL`)
+}
+
+/** Attach to the first page target matching a substring or predicate. */
+export async function attach(match) {
+    const list = await targets()
+    const test = typeof match === 'function' ? match : p => p.url.includes(match)
+    const t = list.find(p => p.type === 'page' && test(p))
+    if (!t) {
+        const have = list.filter(p => p.type === 'page').map(p => p.url).join('\n  ')
+        throw new Error(`no page matching ${match}\nopen pages:\n  ${have}`)
+    }
+    return socket(t.webSocketDebuggerUrl)
+}
+
+export async function socket(wsUrl) {
+    const ws = new WebSocket(wsUrl)
+    await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject })
+
+    let id = 0
+    const pending = new Map()
+    const events = []
+    ws.onmessage = (event) => {
+        const message = JSON.parse(event.data)
+        if (message.id) { pending.get(message.id)?.(message); pending.delete(message.id) }
+        else events.push(message)
+    }
+
+    // Every call is bounded. A CDP reply that never arrives — a renderer wedged by
+    // an emulation override, say — would otherwise hang the script forever, and a
+    // hang that has to be killed loses everything the run had measured.
+    const CALL_TIMEOUT_MS = Number(process.env.MANAGER_CALL_TIMEOUT_MS || 20000)
+    const send = (method, params = {}) => new Promise((resolve, reject) => {
+        const messageId = ++id
+        const timer = setTimeout(() => {
+            pending.delete(messageId)
+            reject(new Error(`CDP ${method} did not answer within ${CALL_TIMEOUT_MS}ms`))
+        }, CALL_TIMEOUT_MS)
+        pending.set(messageId, (message) => {
+            clearTimeout(timer)
+            resolve(message)
+        })
+        ws.send(JSON.stringify({ id: messageId, method, params }))
+    })
+
+    const evaluate = async (expression) => {
+        const { result } = await send('Runtime.evaluate', {
+            expression, awaitPromise: true, returnByValue: true, userGesture: true,
+        })
+        if (result?.exceptionDetails) {
+            const d = result.exceptionDetails
+            throw new Error(d.exception?.description || d.text)
+        }
+        return result?.result?.value
+    }
+
+    const run = body => evaluate(`(async () => { ${body} })()`)
+
+    /** A trusted mouse click at the centre of the element an expression returns. */
+    const realClick = async (expression) => {
+        const box = await run(`
+            const el = (${expression});
+            if (!el) return null;
+            el.scrollIntoView({ block: 'center' });
+            const r = el.getBoundingClientRect();
+            return { x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height };
+        `)
+        if (!box) throw new Error(`realClick: no element for ${expression}`)
+        if (!box.w || !box.h) throw new Error(`realClick: zero-size element for ${expression}`)
+        for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) {
+            await send('Input.dispatchMouseEvent', {
+                type, x: box.x, y: box.y, button: 'left', clickCount: type === 'mouseMoved' ? 0 : 1,
+            })
+        }
+        return box
+    }
+
+    return { send, evaluate, run, realClick, events, close: () => ws.close() }
+}
+
+/** Close the manager Chrome through CDP so the profile is flushed cleanly. */
+export async function closeBrowser() {
+    let version
+    try { version = await browserVersion() }
+    catch { return false }
+    const ws = new WebSocket(version.webSocketDebuggerUrl)
+    await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject })
+    ws.send(JSON.stringify({ id: 1, method: 'Browser.close' }))
+    await sleep(1500)
+    return true
+}
+
+/**
+ * Page-side helper that finds the exporter's mounted menu containers, whichever
+ * build is running.
+ *
+ * `data-ce-mount` only exists on the private 2.36.1 review build, so keying on it
+ * would silently report "not mounted" for official upstream and make any
+ * head-to-head comparison meaningless. `.ce-nav-trigger` is the launcher's own
+ * class in both, and `getMenuContainer()` gives the container it renders into an
+ * inline `z-index: 99` in both — so the container is the nearest ancestor with
+ * that inline value. `strategy` falls back to naming the host surface when the
+ * build does not label its own mount.
+ *
+ * Inject with `${CE_MOUNTS_JS}` at the top of an evaluated body; it defines
+ * `ceMounts()` and `ceStrategy(mount)`.
+ */
+export const CE_MOUNTS_JS = `
+    function ceMounts() {
+        const containerOf = (trigger) => {
+            for (let e = trigger; e; e = e.parentElement) {
+                if (e.hasAttribute && e.hasAttribute('data-ce-mount')) return e;
+                if (e.style && e.style.zIndex === '99') return e;
+            }
+            return trigger.parentElement || trigger;
+        };
+        const seen = new Set();
+        return [...document.querySelectorAll('.ce-nav-trigger')]
+            .map(containerOf)
+            .filter(e => !seen.has(e) && seen.add(e));
+    }
+    function ceStrategy(mount) {
+        if (!mount) return null;
+        const labelled = mount.getAttribute && mount.getAttribute('data-ce-mount');
+        if (labelled) return labelled;
+        if (mount.closest('[data-app-navigation-rail]')) return 'upstream:nav-rail';
+        if (mount.closest('nav')) return 'upstream:sidebar';
+        if (mount.parentElement === document.body) return 'upstream:body';
+        return 'upstream:other';
+    }
+`
