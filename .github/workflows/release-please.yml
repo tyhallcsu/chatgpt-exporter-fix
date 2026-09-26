@@ -1,9 +1,11 @@
 name: release-please
 
 on:
-  push:
-    branches:
-      - master
+  # Release automation belongs to the upstream repository. This fork tracks
+  # upstream and publishes nothing, and the default workflow token here is
+  # read-only, so the action could only ever fail with "Resource not
+  # accessible by integration". Run it on demand instead of on every push.
+  workflow_dispatch:
 
 jobs:
   release-please:
