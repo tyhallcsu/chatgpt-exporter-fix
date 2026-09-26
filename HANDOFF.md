@@ -22,7 +22,7 @@ in dark mode (see *Install the review build*).
 | Our checkpoint (rollback) | `3b38d30` — `checkpoint/2026-09-25-local-repair`, also `master` |
 | Merge base | `816d9fe` |
 | Upstream v2.36.1 | `1d5d118` · upstream master `2780b28` |
-| **Candidate (review)** | **`review/reconcile-upstream-2.36.1` @ `e6e60ed`** |
+| **Candidate (review)** | **`review/reconcile-upstream-2.36.1`** — worktree `/Users/bradbanks/Documents/GitHub/chatgpt-exporter-review` |
 
 ## Recommendation
 
@@ -50,8 +50,8 @@ Artifacts, both version-stamped and hashed:
 
 | | Path | Version | SHA-256 |
 |---|---|---|---|
-| **Review build** | `<worktree>/dist/chatgpt.user.js` | 2.36.1 | `35f21bc0e598c0eeeed5f2dc4442728bb2099371dde2b410f5437717915ff048` |
-| **Rollback** | `checkpoint/2026-09-25-local-repair:dist/chatgpt.user.js` | 2.35.2 | `11133adf16f9e52c932ccc34a43466b0c2ca5f06bf5fae4252c306c2021901d8` |
+| **Review build** | `/Users/bradbanks/Documents/GitHub/chatgpt-exporter-review/dist/chatgpt.user.js` | 2.36.1 | `35f21bc0e598c0eeeed5f2dc4442728bb2099371dde2b410f5437717915ff048` |
+| **Rollback** | `/Users/bradbanks/Documents/GitHub/chatgpt-exporter/dist/chatgpt.user.js` (master = `3b38d30`) | 2.35.2 | `11133adf16f9e52c932ccc34a43466b0c2ca5f06bf5fae4252c306c2021901d8` |
 
 Neither carries `@updateURL`/`@downloadURL`, so neither self-updates. The
 GreasyFork copy does — if it is installed, it will keep updating itself and you
