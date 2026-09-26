@@ -244,8 +244,11 @@ html {
     /* The rail lays a full-bleed absolutely-positioned expand button over itself,
        and a statically-positioned row paints underneath it, so clicks aimed at the
        launcher would expand the sidebar instead. ChatGPT's own rail rows are
-       positioned for the same reason. */
+       positioned for the same reason. The rail also disables pointer events for
+       its whole subtree and each row opts back in, so this row has to as well or
+       the click lands on the expand button behind it. */
     position: relative;
+    pointer-events: auto;
     display: flex;
     width: 100%;
     justify-content: center;
