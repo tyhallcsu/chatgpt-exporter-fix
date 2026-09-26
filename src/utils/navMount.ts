@@ -31,6 +31,21 @@ export function preferRendered<T extends Element>(elements: T[]): T[] {
     return rendered.length > 0 ? rendered : elements
 }
 
+/**
+ * Whether the document reports layout at all.
+ *
+ * `preferRendered` deliberately keeps every candidate when nothing has a size,
+ * so the menu still mounts during first layout or in a document with no layout
+ * engine. The sidebar-panel strategy must not take that escape hatch: when the
+ * page really is laid out and the panel is collapsed, mounting into it produces
+ * a 0x0 launcher while a rendered rail is sitting right there as the next
+ * strategy.
+ */
+function documentHasLayout() {
+    const body = document.body
+    return !!body && typeof body.getClientRects === 'function' && body.getClientRects().length > 0
+}
+
 export interface NavMenuMount {
     target: Element
     insert: (container: Element) => void
@@ -79,7 +94,13 @@ export function getNavMenuMounts(): NavMenuMount[] {
     // last child there is no footer sibling to sit above, so the menu becomes
     // the panel's own last row. Keyed on the viewport, which is torn down with
     // the sidebar and therefore signals exactly when to re-place the menu.
-    const panels = scrollRoots.filter(scrollRoot => !!scrollRoot.parentElement)
+    //
+    // The viewport has to be rendered, not merely present: ChatGPT keeps the
+    // collapsed panel in the DOM at zero size, and mounting there hides the menu
+    // even though the rail strategy below would have placed it visibly.
+    const laidOut = documentHasLayout()
+    const panels = scrollRoots.filter(scrollRoot => !!scrollRoot.parentElement
+        && (!laidOut || scrollRoot.getClientRects().length > 0))
     if (panels.length > 0) {
         return panels.map(scrollRoot => ({
             target: scrollRoot,

@@ -7,11 +7,11 @@
 import { TM_ID, attach, openTab, sleep, targets } from './manager.mjs'
 
 const needle = process.argv[2] || 'review build'
-if (!(await targets()).some(t => t.type === 'page' && t.url.includes(TM_ID))) {
+if (!(await targets()).some(t => t.type === 'page' && t.url.includes(TM_ID) && t.url.includes('options.html'))) {
     await openTab(`chrome-extension://${TM_ID}/options.html#nav=dashboard`)
     await sleep(2500)
 }
-const c = await attach(TM_ID)
+const c = await attach(p => p.url.includes(TM_ID) && p.url.includes('options.html'))
 
 // Advanced config mode exposes the per-script Updates section.
 await c.run(`location.hash = '#nav=settings'; return true`)

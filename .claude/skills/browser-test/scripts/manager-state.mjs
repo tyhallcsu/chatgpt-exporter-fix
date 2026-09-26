@@ -10,10 +10,10 @@ const asJson = process.argv.includes('--json')
 const dashboard = `chrome-extension://${TM_ID}/options.html#nav=dashboard`
 
 const open = await targets()
-if (!open.some(t => t.type === 'page' && t.url.includes(TM_ID))) await openTab(dashboard)
+if (!open.some(t => t.type === 'page' && t.url.includes(TM_ID) && t.url.includes('options.html'))) await openTab(dashboard)
 await sleep(2500)
 
-const c = await attach(TM_ID)
+const c = await attach(p => p.url.includes(TM_ID) && p.url.includes('options.html'))
 await c.run(`location.hash = '#nav=dashboard'; return true`)
 await sleep(2000)
 

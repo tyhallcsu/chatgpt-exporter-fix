@@ -29,8 +29,20 @@ export async function targets() {
     return (await fetch(`${base}/json/list`)).json()
 }
 
+/**
+ * Open a tab and return a target that is ready to attach to. Chrome sometimes
+ * answers `/json/new` before the target has a `webSocketDebuggerUrl`, so the
+ * entry is re-read from the target list until one appears.
+ */
 export async function openTab(url) {
-    return (await fetch(`${base}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' })).json()
+    const created = await (await fetch(`${base}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' })).json()
+    if (created.webSocketDebuggerUrl) return created
+    for (let attempt = 0; attempt < 20; attempt++) {
+        await sleep(250)
+        const found = (await targets()).find(t => t.id === created.id && t.webSocketDebuggerUrl)
+        if (found) return found
+    }
+    throw new Error(`tab ${created.id} never exposed a debugger URL`)
 }
 
 /** Attach to the first page target matching a substring or predicate. */

@@ -53,6 +53,21 @@ const VISIBLE_RAIL_ONLY = `
   </nav>
 </div>`
 
+/**
+ * The live collapsed state, which the panel strategy used to claim: ChatGPT keeps
+ * the expanded panel and its scroll viewport in the DOM at zero size and renders
+ * the rail instead.
+ */
+const COLLAPSED_PANEL_WITH_VISIBLE_RAIL = `
+<div id="root">
+  <nav aria-label="Show sidebar" data-app-navigation-rail="true" class="visible-rail">
+    <div class="rail-footer"><button aria-haspopup="menu" aria-label="Help menu"></button></div>
+  </nav>
+  <nav aria-label="Chat history" class="collapsed-panel">
+    <div data-app-action-sidebar-scroll></div>
+  </nav>
+</div>`
+
 /** Pre-redesign shell. */
 const LEGACY_FOOTER = `
 <div id="root">
@@ -64,6 +79,15 @@ const LEGACY_FOOTER = `
 
 /** A shell with no anchor the exporter recognises. */
 const UNKNOWN_SHELL = `<div id="root"><div class="mystery-shell"></div></div>`
+
+/**
+ * Gives the document itself a size, so `documentHasLayout()` is true. Without
+ * this a fixture models a document with no layout engine, where every candidate
+ * is deliberately kept.
+ */
+function withLayout() {
+    ;(document.body as any).getClientRects = () => [{ width: 1440, height: 900 }]
+}
 
 function mountAll() {
     const mounts = getNavMenuMounts()
@@ -125,6 +149,21 @@ describe('getNavMenuMounts', () => {
         const host = document.getElementById(FLOATING_HOST_ID)
         expect(host).not.toBeNull()
         expect(mounted()[0].getAttribute(MOUNT_ATTRIBUTE)).toBe('floating')
+    })
+
+    it('uses the rail rather than a collapsed panel when the page is laid out', () => {
+        // Regression: the panel strategy only required the scroll viewport to be
+        // *present*, so a collapsed sidebar produced a 0x0 launcher on the live
+        // site while a rendered rail went unused.
+        document.body.innerHTML = COLLAPSED_PANEL_WITH_VISIBLE_RAIL
+        withLayout()
+        hide(document.querySelector('.collapsed-panel')!)
+        show(document.querySelector('.visible-rail')!)
+
+        mountAll()
+
+        expect(mounted()).toHaveLength(1)
+        expect(mounted()[0].getAttribute(MOUNT_ATTRIBUTE)).toBe('nav-rail')
     })
 
     it('keeps every candidate when nothing reports a size', () => {

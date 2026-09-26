@@ -10,8 +10,15 @@ import packageJson from './package.json' with { type: 'json' }
  * a distinct `@name`, a semver-prerelease `@version`, its own filename, and
  * `@updateURL`/`@downloadURL` of `none` so the manager cannot auto-update it.
  * Authorship, namespace and licence stay pionxzh's.
+ *
+ * `REVIEW_BUILD_SEQ` is the commit count, and it leads the prerelease so the
+ * version stays monotonic. A bare SHA does not: semver compares alphanumeric
+ * prerelease identifiers lexically, so Tampermonkey offered `…-review.07f7498`
+ * as a *downgrade* from `…-review.70ad156`. The count is a numeric identifier,
+ * compares numerically, and is still reproducible from the commit alone.
  */
 const reviewBuildId = process.env.REVIEW_BUILD_ID?.trim() || ''
+const reviewBuildSeq = process.env.REVIEW_BUILD_SEQ?.trim() || '0'
 const isReviewBuild = reviewBuildId.length > 0
 const reviewSuffix = ' (review build)'
 
@@ -42,7 +49,7 @@ export default defineConfig({
                 },
                 // Semver prerelease: sorts below 2.36.1, and names the source commit.
                 'version': isReviewBuild
-                    ? `${packageJson.version}-review.${reviewBuildId}`
+                    ? `${packageJson.version}-review.${reviewBuildSeq}.${reviewBuildId}`
                     : packageJson.version,
                 'author': packageJson.author,
                 'namespace': packageJson.author,

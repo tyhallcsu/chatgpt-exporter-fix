@@ -10,16 +10,23 @@ import { RateLimitError, describeListError } from '../src/utils/rateLimit'
  * conversations. These pin the message the dialog now shows instead.
  */
 describe('describeListError', () => {
-    it('names a rate limit and how long to wait', () => {
+    it('quotes the wait the server actually asked for', () => {
         const message = describeListError(new RateLimitError('45'))
         expect(message).toContain('429')
         expect(message).toContain('45s')
+        expect(message).toContain('asked to wait')
     })
 
-    it('falls back to the default wait when the server sends no Retry-After', () => {
-        const message = describeListError(new RateLimitError(null))
+    it('does not present the internal fallback as a server promise', () => {
+        const error = new RateLimitError(null)
+        expect(error.retryAfterFromServer).toBe(false)
+        expect(error.retryAfterMs).toBe(30_000)
+
+        const message = describeListError(error)
         expect(message).toContain('429')
-        expect(message).toContain('30s')
+        expect(message).toContain('no Retry-After')
+        // The 30s fallback governs our own retry pacing, not what we tell a person.
+        expect(message).not.toContain('30s')
     })
 
     it('passes other errors through', () => {

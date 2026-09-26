@@ -401,7 +401,8 @@ interface DialogContentProps {
     format: string
 }
 
-const DialogContent: FC<DialogContentProps> = ({ format }) => {
+/** Exported so the list-load lifecycle can be regression-tested on its own. */
+export const DialogContent: FC<DialogContentProps> = ({ format }) => {
     const { t } = useTranslation()
     const { enableMeta, exportMetaList, exportAllLimit } = useSettingContext()
     const metaList = useMemo(() => enableMeta ? exportMetaList : [], [enableMeta, exportMetaList])
@@ -690,6 +691,10 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
         const gen = ++fetchGenRef.current
         const alive = () => gen === fetchGenRef.current
         setSelected([])
+        // A previous scope's failure must not outlive it: `disabled` keys off
+        // `error`, so a stale message would leave Export permanently greyed out
+        // even once a later load succeeds.
+        setError('')
 
         const cache = selectedProjectId === null && listCache?.limit === exportAllLimit ? listCache : null
         if (cache) {
