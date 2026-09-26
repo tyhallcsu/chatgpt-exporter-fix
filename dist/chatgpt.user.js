@@ -767,15 +767,21 @@
 	}
 	var RateLimitError = class extends Error {
 		retryAfterMs;
+		retryAfterFromServer;
 		constructor(retryAfterHeader) {
 			super("Too Many Requests (429)");
 			this.name = "RateLimitError";
 			const secs = retryAfterHeader != null ? Number.parseInt(retryAfterHeader, 10) : NaN;
-			this.retryAfterMs = Number.isFinite(secs) && secs > 0 ? secs * 1e3 : 3e4;
+			const usable = Number.isFinite(secs) && secs > 0;
+			this.retryAfterFromServer = usable;
+			this.retryAfterMs = usable ? secs * 1e3 : 3e4;
 		}
 	};
 	function describeListError(error) {
-		if (error instanceof RateLimitError) return `ChatGPT is rate limiting the conversation list (HTTP 429). Retry in about ${Math.ceil(error.retryAfterMs / 1e3)}s.`;
+		if (error instanceof RateLimitError) {
+			const seconds = Math.ceil(error.retryAfterMs / 1e3);
+			return error.retryAfterFromServer ? `ChatGPT is rate limiting the conversation list (HTTP 429) and asked to wait ${seconds}s before retrying.` : `ChatGPT is rate limiting the conversation list (HTTP 429). It sent no Retry-After, so there is no stated wait; retrying after a minute or two may work.`;
+		}
 		if (error instanceof Error && error.message) return error.message;
 		return "Failed to load conversations";
 	}
@@ -21491,6 +21497,7 @@
 			const gen = ++fetchGenRef.current;
 			const alive = () => gen === fetchGenRef.current;
 			setSelected([]);
+			setError("");
 			const cache = selectedProjectId === null && listCache?.limit === exportAllLimit ? listCache : null;
 			if (cache) {
 				setApiConversations(cache.items);
@@ -22951,6 +22958,10 @@
 		const rendered = elements.filter((element) => typeof element.getClientRects === "function" && element.getClientRects().length > 0);
 		return rendered.length > 0 ? rendered : elements;
 	}
+	function documentHasLayout() {
+		const body = document.body;
+		return !!body && typeof body.getClientRects === "function" && body.getClientRects().length > 0;
+	}
 	function getNavMenuInsertionTarget(target) {
 		const wrapper = target.parentElement;
 		if (!wrapper || wrapper.children.length !== 1) return target;
@@ -22974,7 +22985,8 @@
 				target.prepend(container);
 			}
 		}));
-		const panels = scrollRoots.filter((scrollRoot) => !!scrollRoot.parentElement);
+		const laidOut = documentHasLayout();
+		const panels = scrollRoots.filter((scrollRoot) => !!scrollRoot.parentElement && (!laidOut || scrollRoot.getClientRects().length > 0));
 		if (panels.length > 0) return panels.map((scrollRoot) => ({
 			target: scrollRoot,
 			insert: (container) => {
