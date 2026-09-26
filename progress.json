@@ -1,0 +1,70 @@
+{
+  "updated": "2026-09-25",
+  "phase": "reconciliation-complete-awaiting-review",
+  "next_action": "Owner installs review build and confirms the dark-mode menu is readable",
+  "posture": {
+    "repo_private": true,
+    "pull_requests_opened": 0,
+    "published": false,
+    "master_untouched": true,
+    "upstream_pr": "gated on approval"
+  },
+  "refs": {
+    "merge_base": "816d9fe7b929d63b254f806b380f814a0005358e",
+    "checkpoint_rollback": "3b38d30f1d096120a7057ea4082ef814ef9e6692",
+    "upstream_v2_36_1": "1d5d1189c802af8cfe55201715a86e2f1477a8ef",
+    "upstream_master": "2780b28f6b1b20abe3b8c74d1338504593aebde1",
+    "candidate_branch": "review/reconcile-upstream-2.36.1",
+    "candidate_commit": "e6e60ed215d5"
+  },
+  "artifacts": {
+    "candidate": {
+      "version": "2.36.1",
+      "sha256": "35f21bc0e598c0eeeed5f2dc4442728bb2099371dde2b410f5437717915ff048",
+      "self_updates": false
+    },
+    "rollback": {
+      "version": "2.35.2",
+      "sha256": "11133adf16f9e52c932ccc34a43466b0c2ca5f06bf5fae4252c306c2021901d8",
+      "self_updates": false
+    }
+  },
+  "checks": {
+    "pnpm_test": "119 passed",
+    "pnpm_lint": "clean",
+    "pnpm_build": "ok",
+    "hooks_bypassed": false
+  },
+  "verified_live": [
+    "launcher visible 310x46",
+    "menu contrast 12.3:1",
+    "no React #418",
+    "markdown",
+    "html",
+    "json",
+    "copy-text",
+    "short screenshot",
+    "scroll restored",
+    "timestamps",
+    "export-all dialog theming"
+  ],
+  "unverified": [
+    "userscript-manager (Tampermonkey) install",
+    "Export All ZIP end-to-end",
+    "long-thread PNG size limit",
+    "runtime theme switching",
+    "collapsed/mobile on live variant",
+    "SPA nav on candidate"
+  ],
+  "decisions": {
+    "theme_detector": "dropped, upstream's is correct",
+    "timestamps": "upstream",
+    "screenshot": "upstream",
+    "export_content": "upstream",
+    "mount_visibility_guard": "ours",
+    "sidebar_panel_strategy": "ours",
+    "hydration_gate": "ours",
+    "floating_fallback": "ours (insurance)"
+  },
+  "issue": "https://github.com/tyhallcsu/chatgpt-exporter-fix/issues/5"
+}
