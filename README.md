@@ -1,11 +1,92 @@
-<h1 align="center">ChatGPT Exporter</h1>
+<p align="center">
+  <img src="assets/repository-banner.jpg" alt="Conversation lines becoming export documents, with a mint repair stitch on an indigo background." width="100%">
+</p>
+
+# ChatGPT Exporter · Repair Fork
+
+**Keep conversations portable. Keep the exporter working.**
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-source-3178c6?style=flat-square)](src/) [![MIT license](https://img.shields.io/badge/License-MIT-6ac9aa?style=flat-square)](LICENSE) [![Windows and macOS builds](https://img.shields.io/badge/Download-Windows%20%C2%B7%20macOS-6ac9aa?style=flat-square)](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/latest) [![Userscript](https://img.shields.io/badge/Install-Tampermonkey-59636e?style=flat-square)](#userscript-only)
+
+[Download](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/latest) · [Install this fork](#install-this-fork) · [What this fork adds](#what-this-fork-adds) · [Formats](#-supported-formats) · [Examples](#-example) · [Batch export](#-export-multiple-conversations) · [Development](#development)
+
+This fork of [pionxzh/chatgpt-exporter](https://github.com/pionxzh/chatgpt-exporter) tracks upstream **v2.36.2** and adds Windows and macOS installers for the userscript, plus upstream [PR #400](https://github.com/pionxzh/chatgpt-exporter/pull/400)'s conversation-list error handling. The userscript exports conversations as text, HTML, Markdown, PNG, or JSON; batch export also supports JSON ZIP.
+
+This fork previously carried its own navigation, conversation-detection and theme repairs. Upstream shipped equivalent fixes in v2.36.2, so those private versions were dropped rather than maintained in parallel — see [`docs/2.36.2-reconciliation.md`](docs/2.36.2-reconciliation.md).
+
+## Install this fork
+
+### Desktop installer
+
+Windows and macOS builds are on the [**Releases page**](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/latest).
+
+| You have | Download |
+| --- | --- |
+| **Windows** 10 / 11 | `ChatGPT-Exporter-Setup-<version>-windows-x64.exe` |
+| Windows, no install wanted | `ChatGPT-Exporter-Portable-<version>-windows-x64.exe` |
+| Windows, managed deployment | `ChatGPT-Exporter-<version>-windows-x64.msi` |
+| **macOS** 10.15+, any Mac | `ChatGPT-Exporter-<version>-macos-universal.dmg` |
+
+The desktop app is an **installer, not a ChatGPT client**. It carries a verified copy of the userscript, shows you its version and SHA-256, and hands it to your userscript manager — the exporter still runs as a userscript in your own browser. It reads no browser profile, cookie store or session.
+
+These builds are **not code-signed**, so macOS Gatekeeper and Windows SmartScreen will both ask before the first launch. Check your download against `SHA256SUMS.txt` on the release first. How signing gets turned on later is in [`docs/desktop-release-design.md`](docs/desktop-release-design.md); what the app itself does is in [`desktop/README.md`](desktop/README.md).
+
+### Userscript only
+
+Fully supported, and nothing about the desktop helper is required.
+
+1. Install Tampermonkey using the [browser links below](#prerequisites).
+2. Download `chatgpt-exporter-<version>.user.js` from the [Releases page](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/latest), or [dist/chatgpt.user.js](dist/chatgpt.user.js) from this branch.
+3. Disable or remove any older ChatGPT Exporter installation to avoid two copies mounting at once.
+4. In Tampermonkey, open **Dashboard → Utilities → Import from file** and choose the file.
+5. Reload ChatGPT. Look for **Export** in the sidebar or its icon in the collapsed rail.
+
+> **Which code is in the release?** `master` is it. The artifacts published in [desktop-v2.36.2.1](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/tag/desktop-v2.36.2.1) are built from this source — upstream v2.36.2 plus upstream [PR #400](https://github.com/pionxzh/chatgpt-exporter/pull/400), and nothing else. The tracked [`dist/chatgpt.user.js`](dist/chatgpt.user.js) is the same bytes as the release's `chatgpt-exporter-2.36.2.user.js`, SHA-256 `9daa710bc102bb5dc62f574958581efd2029ea68cd5f6fb60ac7d3bfe8475f93`, reproduced independently on Ubuntu, macOS and Windows.
+
+The upstream GreasyFork and raw-GitHub links below install the upstream version, not this fork's builds.
+
+## What this fork adds
+
+| Area | Implementation / evidence |
+|---|---|
+| Conversation-list errors surfaced in Export All | [`src/ui/ExportDialog.tsx`](src/ui/ExportDialog.tsx) · [tests](tests/export-dialog-list-load.test.tsx) |
+| Windows and macOS installers | [`desktop/`](desktop/) · [packaging design](docs/desktop-release-design.md) |
+| What was dropped, and why | [reconciliation notes](docs/2.36.2-reconciliation.md) · [upstream comparison](docs/upstream-comparison.md) |
+| What was verified, and how | [verification matrix](docs/verification-matrix.md) |
+
+Everything else is upstream v2.36.2 unmodified. The only source difference from
+upstream's `userscript-v2.36.2` tag is PR #400's error handling in `src/api.ts`
+and `src/ui/ExportDialog.tsx`, with its tests. Upstream merged PR #400 on
+2026-09-26; this fork carries it ahead of the upstream release that will contain
+it.
+
+Known limitations: very long PNG exports can exceed renderer limits, and API rate
+limits can delay the conversation list — which is what PR #400 makes visible
+instead of showing a silently short list. The examples and screenshots below are
+inherited upstream material, not new captures of this fork.
+
+## Development
+
+Use the pinned **pnpm 8.14.1** and a Node version compatible with the checked-in dependencies (the package declares Node >=20). See [CONTRIBUTING.md](CONTRIBUTING.md) for setup details, and [`docs/2.36.2-reconciliation.md`](docs/2.36.2-reconciliation.md) for how this branch relates to upstream.
+
+```bash
+pnpm install --frozen-lockfile
+pnpm test
+pnpm lint
+pnpm build
+```
+
+`pnpm test` runs TypeScript checking and Vitest. The build writes the tracked `dist/chatgpt.user.js`; source changes should include a rebuilt bundle. Presentation-only edits do not require replacing that bundle.
+
+## Upstream project and installation
+
 
 <div align="center">
 
-## A GreasyFork script to export the chat history of [ChatGPT](https://chatgpt.com/)
+A GreasyFork script to export the chat history of [ChatGPT](https://chatgpt.com/).
 
 [![license][license-image]][license-url]
-[![release][release-image]][release-url]
+[![Upstream release][release-image]][release-url]
 [![GreasyFork][GreasyFork-image]][GreasyFork-url]
 
 [license-image]: https://img.shields.io/github/license/pionxzh/chatgpt-exporter?color=red
@@ -17,9 +98,9 @@
 
 English &nbsp;&nbsp;|&nbsp;&nbsp; [Français](./README_FR.md) &nbsp;&nbsp;|&nbsp;&nbsp; [Indonesia](./README_ID.md) &nbsp;&nbsp;|&nbsp;&nbsp; [한국어](./README_KR.md) &nbsp;&nbsp;|&nbsp;&nbsp; [Türkçe](./README_TR.md)
 
-![image](https://github.com/pionxzh/chatgpt-exporter/assets/9910706/1c864670-7912-4484-b4be-bdf5dde51557)
+![Upstream exporter preview](https://github.com/pionxzh/chatgpt-exporter/assets/9910706/1c864670-7912-4484-b4be-bdf5dde51557)
 
-## Install
+### Upstream install
 
 ### Prerequisites
 
@@ -31,7 +112,7 @@ English &nbsp;&nbsp;|&nbsp;&nbsp; [Français](./README_FR.md) &nbsp;&nbsp;|&nbsp
 [link-firefox]: https://addons.mozilla.org/firefox/addon/tampermonkey 'Firefox Add-ons'
 [link-edge]: https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd 'Edge Add-ons'
 
-### UserScript
+### Upstream UserScript
 
 | Greasyfork                                                                        | GitHub                                                                                       |
 | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -44,42 +125,13 @@ English &nbsp;&nbsp;|&nbsp;&nbsp; [Français](./README_FR.md) &nbsp;&nbsp;|&nbsp
 
 > Make sure that the [`Allow User Scripts` is enabled](https://www.tampermonkey.net/faq.php?q=Q209) in your browser settings for Tampermonkey.
 
-### Desktop installer — this fork only
-
-<div align="left">
-
-A small helper app that carries a verified copy of the userscript and hands it to
-your userscript manager, so you can see the version and SHA-256 of what you are
-installing. It is an installer, not a ChatGPT client — the exporter still runs as
-a userscript in your own browser.
-
-Download from [**Releases**](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases):
-
-| You have | Download |
-| --- | --- |
-| **Windows** 10 / 11 | `ChatGPT-Exporter-Setup-<version>-windows-x64.exe` |
-| Windows, no install wanted | `ChatGPT-Exporter-Portable-<version>-windows-x64.exe` |
-| Windows, managed deployment | `ChatGPT-Exporter-<version>-windows-x64.msi` |
-| **macOS** 10.15+, any Mac | `ChatGPT-Exporter-<version>-macos-universal.dmg` |
-
-These builds are **not code-signed**, so macOS Gatekeeper and Windows SmartScreen
-will both ask before the first launch. Check your download against
-`SHA256SUMS.txt` on the release first. Details, and how signing gets turned on
-later, are in [`docs/desktop-release-design.md`](./docs/desktop-release-design.md).
-
-**The userscript-only install above stays fully supported** — nothing about the
-desktop helper is required, and it changes nothing about how the exporter works
-once installed. See [`desktop/README.md`](./desktop/README.md).
-
-</div>
-
-#
+---
 
 [📚 Supported Formats](#-supported-formats) &nbsp;&nbsp;|&nbsp;&nbsp; [💡 Example](#-example) &nbsp;&nbsp;|&nbsp;&nbsp; [📤 Export Multiple Conversations](#-export-multiple-conversations) &nbsp;&nbsp;|&nbsp;&nbsp; [🤝 Contribution](#-contribution) &nbsp;&nbsp;|&nbsp;&nbsp; [⭐ Star History](#-star-history)
 
 </div>
 
-#
+---
 
 ## 📚 Supported Formats
 
@@ -115,7 +167,7 @@ consequences of using it in any given situation.
 
 <div align="center">
 
-<img width="643" alt="image" src="https://github.com/pionxzh/chatgpt-exporter/assets/9910706/47481c7a-4a6a-433b-b08e-fdf3bbabcb64">
+<img width="643" alt="Upstream HTML export example" src="https://github.com/pionxzh/chatgpt-exporter/assets/9910706/47481c7a-4a6a-433b-b08e-fdf3bbabcb64">
 
 </div>
 
@@ -140,7 +192,7 @@ It sounds like you're planning on creating a tool that uses the ChatGPT model to
 ### Screenshot
 
 <div align="center">
-<img width="480" src="https://user-images.githubusercontent.com/9910706/205663680-6ac97fac-39b0-495c-bee4-8ef37713a9ae.png" />
+<img width="480" alt="Upstream PNG export example" src="https://user-images.githubusercontent.com/9910706/205663680-6ac97fac-39b0-495c-bee4-8ef37713a9ae.png" />
 
 </div>
 
@@ -284,6 +336,8 @@ Check out [**DeepSeek Exporter**](https://github.com/pionxzh/deepseek-exporter) 
 See [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 ## ⭐ Star History
+
+Upstream project history: `pionxzh/chatgpt-exporter`.
 
 <div align="center">
 
