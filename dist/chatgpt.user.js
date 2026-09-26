@@ -22954,13 +22954,14 @@
 	var RAIL_MENU_BUTTON_SELECTOR = "[data-app-navigation-rail] button[aria-haspopup=\"menu\"]";
 	var FLOATING_HOST_ID = "chatgpt-exporter-floating-root";
 	var MOUNT_ATTRIBUTE = "data-ce-mount";
-	function preferRendered(elements) {
-		const rendered = elements.filter((element) => typeof element.getClientRects === "function" && element.getClientRects().length > 0);
-		return rendered.length > 0 ? rendered : elements;
-	}
 	function documentHasLayout() {
 		const body = document.body;
 		return !!body && typeof body.getClientRects === "function" && body.getClientRects().length > 0;
+	}
+	function preferRendered(elements) {
+		const rendered = elements.filter((element) => typeof element.getClientRects === "function" && element.getClientRects().length > 0);
+		if (rendered.length > 0) return rendered;
+		return documentHasLayout() ? [] : elements;
 	}
 	function getNavMenuInsertionTarget(target) {
 		const wrapper = target.parentElement;
@@ -22985,8 +22986,7 @@
 				target.prepend(container);
 			}
 		}));
-		const laidOut = documentHasLayout();
-		const panels = scrollRoots.filter((scrollRoot) => !!scrollRoot.parentElement && (!laidOut || scrollRoot.getClientRects().length > 0));
+		const panels = scrollRoots.filter((scrollRoot) => !!scrollRoot.parentElement);
 		if (panels.length > 0) return panels.map((scrollRoot) => ({
 			target: scrollRoot,
 			insert: (container) => {

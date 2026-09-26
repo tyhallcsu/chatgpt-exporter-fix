@@ -3,11 +3,11 @@
 // @name:zh-CN         ChatGPT Exporter (review build)
 // @name:zh-TW         ChatGPT Exporter (review build)
 // @namespace          pionxzh
-// @version            2.36.1-review.630.ed41b1a
+// @version            2.36.1-review.632.37badf7
 // @author             pionxzh
-// @description        [REVIEW BUILD ed41b1a — unreleased, for local review only] Export ChatGPT conversations with one click — backup & share effortlessly!
-// @description:zh-CN  [REVIEW BUILD ed41b1a — unreleased, for local review only] 一键导出 ChatGPT 对话，轻松备份与分享
-// @description:zh-TW  [REVIEW BUILD ed41b1a — unreleased, for local review only] 一鍵導出 ChatGPT 對話，輕鬆備份與分享
+// @description        [REVIEW BUILD 37badf7 — unreleased, for local review only] Export ChatGPT conversations with one click — backup & share effortlessly!
+// @description:zh-CN  [REVIEW BUILD 37badf7 — unreleased, for local review only] 一键导出 ChatGPT 对话，轻松备份与分享
+// @description:zh-TW  [REVIEW BUILD 37badf7 — unreleased, for local review only] 一鍵導出 ChatGPT 對話，輕鬆備份與分享
 // @license            MIT
 // @icon               https://chatgpt.com/favicon.ico
 // @downloadURL        none
@@ -22956,13 +22956,14 @@
 	var RAIL_MENU_BUTTON_SELECTOR = "[data-app-navigation-rail] button[aria-haspopup=\"menu\"]";
 	var FLOATING_HOST_ID = "chatgpt-exporter-floating-root";
 	var MOUNT_ATTRIBUTE = "data-ce-mount";
-	function preferRendered(elements) {
-		const rendered = elements.filter((element) => typeof element.getClientRects === "function" && element.getClientRects().length > 0);
-		return rendered.length > 0 ? rendered : elements;
-	}
 	function documentHasLayout() {
 		const body = document.body;
 		return !!body && typeof body.getClientRects === "function" && body.getClientRects().length > 0;
+	}
+	function preferRendered(elements) {
+		const rendered = elements.filter((element) => typeof element.getClientRects === "function" && element.getClientRects().length > 0);
+		if (rendered.length > 0) return rendered;
+		return documentHasLayout() ? [] : elements;
 	}
 	function getNavMenuInsertionTarget(target) {
 		const wrapper = target.parentElement;
@@ -22987,8 +22988,7 @@
 				target.prepend(container);
 			}
 		}));
-		const laidOut = documentHasLayout();
-		const panels = scrollRoots.filter((scrollRoot) => !!scrollRoot.parentElement && (!laidOut || scrollRoot.getClientRects().length > 0));
+		const panels = scrollRoots.filter((scrollRoot) => !!scrollRoot.parentElement);
 		if (panels.length > 0) return panels.map((scrollRoot) => ({
 			target: scrollRoot,
 			insert: (container) => {
