@@ -234,3 +234,18 @@ html {
         stroke-dashoffset: -125px;
     }
 }
+
+/* Exporter-owned layout for its mount containers. The rail is a narrow column of
+   centred icons, and the sidebar footer stacks full-width rows, so the container
+   has to match its neighbours rather than sit wherever a bare div lands. */
+[data-ce-mount="nav-rail"] {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 4px;
+}
+
+[data-ce-mount="sidebar-footer"] {
+    display: block;
+    width: 100%;
+}

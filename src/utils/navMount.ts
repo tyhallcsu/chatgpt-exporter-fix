@@ -47,9 +47,118 @@ export function preferRendered<T extends Element>(elements: T[]): T[] {
     return documentHasLayout() ? [] : elements
 }
 
+/** ChatGPT's inline custom property reserving room for the sidebar footer. */
+export const SIDEBAR_FOOTER_VAR = '--sidebar-footer-height'
+
+interface SidebarFooter {
+    /** The bottom-anchored group ChatGPT overlays on the sidebar (profile row, …). */
+    group: HTMLElement
+    /** The element carrying `--sidebar-footer-height`, which the scroll area reserves. */
+    owner: HTMLElement
+    /** The reserved height, in px, as the owner currently declares it. */
+    reserved: number
+}
+
+/** Original inline value of the reservation, so cleanup can put it back verbatim. */
+const reservedBefore = new WeakMap<HTMLElement, string | null>()
+
+function pxOf(value: string) {
+    const n = Number.parseFloat(value)
+    return Number.isFinite(n) ? n : Number.NaN
+}
+
+/**
+ * Finds the footer ChatGPT overlays on the sidebar, and the element that reserves
+ * room for it.
+ *
+ * The scroll area keeps clear of the footer with `margin-bottom:
+ * var(--sidebar-footer-height)`, and the footer itself is absolutely positioned
+ * against the sidebar's bottom edge, *outside* the navigation element. Anything
+ * appended to the navigation therefore lands in the band the footer already
+ * occupies. Identified structurally — the bottom-anchored box whose height is the
+ * reserved height — so no localised label or generated class name is relied on.
+ */
+function getSidebarFooter(scrollRoot: Element): SidebarFooter | null {
+    let owner: HTMLElement | null = scrollRoot.parentElement as HTMLElement | null
+    while (owner && !owner.style?.getPropertyValue(SIDEBAR_FOOTER_VAR)) {
+        owner = owner.parentElement as HTMLElement | null
+    }
+    if (!owner) return null
+
+    const reserved = pxOf(getComputedStyle(owner).getPropertyValue(SIDEBAR_FOOTER_VAR))
+    if (!Number.isFinite(reserved) || reserved <= 0) return null
+
+    const group = Array.from(owner.querySelectorAll<HTMLElement>('*')).find((element) => {
+        if (element.contains(scrollRoot) || scrollRoot.contains(element)) return false
+        if (element.getClientRects().length === 0) return false
+        const style = getComputedStyle(element)
+        if (style.position !== 'absolute' || pxOf(style.bottom) !== 0) return false
+        return Math.abs(element.getBoundingClientRect().height - reserved) <= 1
+    })
+    if (!group) return null
+
+    return { group, owner, reserved }
+}
+
+/**
+ * Grows the reservation to the footer's current height.
+ *
+ * Adding a row makes the footer taller; without this the extra height would cover
+ * the end of the conversation list instead of pushing it up, and the last item
+ * could not be scrolled to. Uses ChatGPT's own reservation property rather than a
+ * negative margin or a stacking-order trick.
+ */
+export function reserveSidebarFooterSpace(owner: HTMLElement, group: HTMLElement) {
+    if (!reservedBefore.has(owner)) {
+        reservedBefore.set(owner, owner.style.getPropertyValue(SIDEBAR_FOOTER_VAR) || null)
+    }
+    const needed = Math.ceil(group.getBoundingClientRect().height)
+    if (!Number.isFinite(needed) || needed <= 0) return
+    if (pxOf(owner.style.getPropertyValue(SIDEBAR_FOOTER_VAR)) === needed) return
+    owner.style.setProperty(SIDEBAR_FOOTER_VAR, `${needed}px`)
+}
+
+/** Puts the reservation back exactly as ChatGPT had it. */
+export function releaseSidebarFooterSpace(owner: HTMLElement) {
+    if (!reservedBefore.has(owner)) return
+    const original = reservedBefore.get(owner) ?? null
+    if (original === null) owner.style.removeProperty(SIDEBAR_FOOTER_VAR)
+    else owner.style.setProperty(SIDEBAR_FOOTER_VAR, original)
+    reservedBefore.delete(owner)
+}
+
+/** Owners whose reservation this module has grown, so a sync can keep them current. */
+const grownOwners = new Set<HTMLElement>()
+
+/** Re-measures every grown reservation. Cheap, and called from the mount sync. */
+export function syncSidebarFooterSpace() {
+    for (const owner of grownOwners) {
+        if (!owner.isConnected) {
+            releaseSidebarFooterSpace(owner)
+            grownOwners.delete(owner)
+            continue
+        }
+        const group = Array.from(owner.querySelectorAll<HTMLElement>(`[${MOUNT_ATTRIBUTE}="sidebar-footer"]`))[0]?.parentElement
+        if (!group || !group.isConnected) {
+            releaseSidebarFooterSpace(owner)
+            grownOwners.delete(owner)
+            continue
+        }
+        reserveSidebarFooterSpace(owner, group)
+    }
+}
+
 export interface NavMenuMount {
     target: Element
     insert: (container: Element) => void
+}
+
+/** The rail's own direct child that holds `element`, i.e. one whole rail row. */
+function railRowOf(element: Element, rail: Element | null) {
+    if (!rail) return null
+    let row: Element | null = element
+    while (row && row.parentElement && row.parentElement !== rail) row = row.parentElement
+    return row && row.parentElement === rail ? row : null
 }
 
 function getNavMenuInsertionTarget(target: Element) {
@@ -91,6 +200,24 @@ export function getNavMenuMounts(): NavMenuMount[] {
         }))
     }
 
+    // Expanded sidebar, current shell. The menu becomes a row inside the footer
+    // ChatGPT overlays on the sidebar, directly above the account row, and the
+    // reservation grows so neither row covers the other or the conversation list.
+    const footers = scrollRoots
+        .map(scrollRoot => getSidebarFooter(scrollRoot))
+        .filter((footer): footer is SidebarFooter => footer !== null)
+    if (footers.length > 0) {
+        return footers.map(({ group, owner }) => ({
+            target: group,
+            insert: (container) => {
+                container.setAttribute(MOUNT_ATTRIBUTE, 'sidebar-footer')
+                group.prepend(container)
+                grownOwners.add(owner)
+                reserveSidebarFooterSpace(owner, group)
+            },
+        }))
+    }
+
     // Expanded sidebar. On the layouts where the scroll viewport is the panel's
     // last child there is no footer sibling to sit above, so the menu becomes
     // the panel's own last row. Keyed on the viewport, which is torn down with
@@ -109,16 +236,22 @@ export function getNavMenuMounts(): NavMenuMount[] {
         }))
     }
 
-    // Collapsed sidebar: place the menu above the first footer menu, which is
-    // the help menu.
+    // Collapsed sidebar. The rail is a column of rows, and its last one holds the
+    // account control — which is itself the `aria-haspopup="menu"` button this
+    // selector finds. Inserting next to that button put the menu *inside* the
+    // account row as a second flex item, on top of it. Insert before the whole
+    // row instead, so the menu gets a row of the rail to itself.
     const railMenuButtons = preferRendered(Array.from(document.querySelectorAll(RAIL_MENU_BUTTON_SELECTOR)))
     if (railMenuButtons.length > 0) {
         const railMenuButton = railMenuButtons[0]
+        const rail = railMenuButton.closest('[data-app-navigation-rail]')
         return [{
             target: railMenuButton,
             insert: (container) => {
                 container.setAttribute(MOUNT_ATTRIBUTE, 'nav-rail')
-                getNavMenuInsertionTarget(railMenuButton).before(container)
+                const row = railRowOf(railMenuButton, rail)
+                if (row) row.before(container)
+                else getNavMenuInsertionTarget(railMenuButton).before(container)
             },
         }]
     }

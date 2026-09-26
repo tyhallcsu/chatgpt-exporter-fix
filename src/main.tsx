@@ -11,6 +11,7 @@ import {
     RAIL_MENU_BUTTON_SELECTOR,
     SIDEBAR_SCROLL_SELECTOR,
     getNavMenuMounts,
+    syncSidebarFooterSpace,
 } from './utils/navMount'
 import type { NavMenuMount } from './utils/navMount'
 import { whenShellSettled } from './utils/shellSettle'
@@ -67,6 +68,10 @@ function main() {
 
             const floatingHost = document.getElementById(FLOATING_HOST_ID)
             if (floatingHost && floatingHost.children.length === 0) floatingHost.remove()
+
+            // The footer row changes ChatGPT's footer height, and the reservation
+            // that keeps the conversation list clear of it has to follow.
+            syncSidebarFooterSpace()
         }
 
         // Sentinel handles new sidebar nodes immediately. Polling remains as a
