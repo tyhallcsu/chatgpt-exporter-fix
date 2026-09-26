@@ -6,21 +6,42 @@
 
 **Keep conversations portable. Keep the exporter working.**
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-source-3178c6?style=flat-square)](src/) [![MIT license](https://img.shields.io/badge/License-MIT-6ac9aa?style=flat-square)](LICENSE) [![Userscript](https://img.shields.io/badge/Install-Tampermonkey-59636e?style=flat-square)](#install-this-fork)
+[![TypeScript](https://img.shields.io/badge/TypeScript-source-3178c6?style=flat-square)](src/) [![MIT license](https://img.shields.io/badge/License-MIT-6ac9aa?style=flat-square)](LICENSE) [![Windows and macOS builds](https://img.shields.io/badge/Download-Windows%20%C2%B7%20macOS-6ac9aa?style=flat-square)](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/latest) [![Userscript](https://img.shields.io/badge/Install-Tampermonkey-59636e?style=flat-square)](#userscript-only)
 
-[Install this fork](#install-this-fork) · [Repair notes](#repair-notes) · [Formats](#-supported-formats) · [Examples](#-example) · [Batch export](#-export-multiple-conversations) · [Development](#development)
+[Download](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/latest) · [Install this fork](#install-this-fork) · [Repair notes](#repair-notes) · [Formats](#-supported-formats) · [Examples](#-example) · [Batch export](#-export-multiple-conversations) · [Development](#development)
 
-This private fork of [pionxzh/chatgpt-exporter](https://github.com/pionxzh/chatgpt-exporter) carries navigation, conversation-detection, and theme repairs for ChatGPT's changed interface. The userscript exports conversations as text, HTML, Markdown, PNG, or JSON; batch export also supports JSON ZIP.
+This fork of [pionxzh/chatgpt-exporter](https://github.com/pionxzh/chatgpt-exporter) carries navigation, conversation-detection, and theme repairs for ChatGPT's changed interface. The userscript exports conversations as text, HTML, Markdown, PNG, or JSON; batch export also supports JSON ZIP.
 
 ## Install this fork
 
+### Desktop installer
+
+Windows and macOS builds are on the [**Releases page**](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/latest).
+
+| You have | Download |
+| --- | --- |
+| **Windows** 10 / 11 | `ChatGPT-Exporter-Setup-<version>-windows-x64.exe` |
+| Windows, no install wanted | `ChatGPT-Exporter-Portable-<version>-windows-x64.exe` |
+| Windows, managed deployment | `ChatGPT-Exporter-<version>-windows-x64.msi` |
+| **macOS** 10.15+, any Mac | `ChatGPT-Exporter-<version>-macos-universal.dmg` |
+
+The desktop app is an **installer, not a ChatGPT client**. It carries a verified copy of the userscript, shows you its version and SHA-256, and hands it to your userscript manager — the exporter still runs as a userscript in your own browser. It reads no browser profile, cookie store or session.
+
+These builds are **not code-signed**, so macOS Gatekeeper and Windows SmartScreen will both ask before the first launch. Check your download against `SHA256SUMS.txt` on the release first.
+
+### Userscript only
+
+Fully supported, and nothing about the desktop helper is required.
+
 1. Install Tampermonkey using the [browser links below](#prerequisites).
-2. Download [dist/chatgpt.user.js](dist/chatgpt.user.js) from this authenticated repository checkout, or use its local copy.
+2. Download `chatgpt-exporter-<version>.user.js` from the [Releases page](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/latest), or [dist/chatgpt.user.js](dist/chatgpt.user.js) from this branch.
 3. Disable or remove any older ChatGPT Exporter installation to avoid two copies mounting at once.
-4. In Tampermonkey, open **Dashboard → Utilities → Import from file** and choose `chatgpt.user.js`.
+4. In Tampermonkey, open **Dashboard → Utilities → Import from file** and choose the file.
 5. Reload ChatGPT. Look for **Export** in the sidebar or its icon in the collapsed rail.
 
-This repository stays private. The upstream GreasyFork and raw-GitHub links below install the upstream version, not this fork's repairs. A public raw download URL is not this fork's installation path.
+> **Which code is in the release?** The published artifacts are built from the [`review/reconcile-upstream-2.36.2`](https://github.com/tyhallcsu/chatgpt-exporter-fix/tree/review/reconcile-upstream-2.36.2) line — upstream v2.36.2 plus upstream [PR #400](https://github.com/pionxzh/chatgpt-exporter/pull/400), and nothing else. That line **supersedes the repairs on this branch**: upstream shipped its own fixes for them in 2.36.2, so the reconciliation dropped the private versions. Bringing it onto `master` is [PR #6](https://github.com/tyhallcsu/chatgpt-exporter-fix/pull/6), which is not merged yet. Until it is, `dist/chatgpt.user.js` on `master` is the older 2.36.1-era fork build, not what the release ships.
+
+The upstream GreasyFork and raw-GitHub links below install the upstream version, not this fork's builds.
 
 ## Repair notes
 
