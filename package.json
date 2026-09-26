@@ -23,6 +23,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:review": "REVIEW_BUILD_ID=$(git rev-parse --short HEAD) vite build",
     "test": "tsc --noEmit && vitest run",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
