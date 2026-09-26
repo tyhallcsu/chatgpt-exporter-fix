@@ -13,9 +13,15 @@ const open = await targets()
 if (!open.some(t => t.type === 'page' && t.url.includes(TM_ID) && t.url.includes('options.html'))) await openTab(dashboard)
 await sleep(2500)
 
-const c = await attach(p => p.url.includes(TM_ID) && p.url.includes('options.html'))
+// The dashboard does not repaint itself when a script is installed from another
+// tab, so a stale read would report the previous version. Reload it.
+let c = await attach(p => p.url.includes(TM_ID) && p.url.includes('options.html'))
 await c.run(`location.hash = '#nav=dashboard'; return true`)
-await sleep(2000)
+await c.send('Page.enable')
+await c.send('Page.reload')
+c.close()
+await sleep(3500)
+c = await attach(p => p.url.includes(TM_ID) && p.url.includes('options.html'))
 
 const state = await c.run(`
     const rows = [...document.querySelectorAll('tr')].filter(r => r.cells && r.cells.length > 10 && !r.querySelector('th') && !r.querySelector('a.settingsth_a'));

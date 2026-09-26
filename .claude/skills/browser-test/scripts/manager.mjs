@@ -70,9 +70,20 @@ export async function socket(wsUrl) {
         else events.push(message)
     }
 
-    const send = (method, params = {}) => new Promise((resolve) => {
+    // Every call is bounded. A CDP reply that never arrives — a renderer wedged by
+    // an emulation override, say — would otherwise hang the script forever, and a
+    // hang that has to be killed loses everything the run had measured.
+    const CALL_TIMEOUT_MS = Number(process.env.MANAGER_CALL_TIMEOUT_MS || 20000)
+    const send = (method, params = {}) => new Promise((resolve, reject) => {
         const messageId = ++id
-        pending.set(messageId, resolve)
+        const timer = setTimeout(() => {
+            pending.delete(messageId)
+            reject(new Error(`CDP ${method} did not answer within ${CALL_TIMEOUT_MS}ms`))
+        }, CALL_TIMEOUT_MS)
+        pending.set(messageId, (message) => {
+            clearTimeout(timer)
+            resolve(message)
+        })
         ws.send(JSON.stringify({ id: messageId, method, params }))
     })
 

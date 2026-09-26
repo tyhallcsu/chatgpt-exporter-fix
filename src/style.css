@@ -113,7 +113,9 @@ html {
 #chatgpt-exporter-floating-root {
     position: fixed;
     left: 12px;
-    bottom: 12px;
+    /* Clear of the composer's attachment button, which sits in the bottom-left
+       corner once the sidebar drawer is closed on a narrow viewport. */
+    bottom: 88px;
     z-index: 998;
 }
 
@@ -239,6 +241,11 @@ html {
    centred icons, and the sidebar footer stacks full-width rows, so the container
    has to match its neighbours rather than sit wherever a bare div lands. */
 [data-ce-mount="nav-rail"] {
+    /* The rail lays a full-bleed absolutely-positioned expand button over itself,
+       and a statically-positioned row paints underneath it, so clicks aimed at the
+       launcher would expand the sidebar instead. ChatGPT's own rail rows are
+       positioned for the same reason. */
+    position: relative;
     display: flex;
     width: 100%;
     justify-content: center;
@@ -248,4 +255,11 @@ html {
 [data-ce-mount="sidebar-footer"] {
     display: block;
     width: 100%;
+}
+
+[data-ce-mount="sidebar-panel"] {
+    /* Fallback placement, used when the footer group cannot be identified. The
+       band at the bottom of the sidebar belongs to ChatGPT's footer, so keep this
+       row above it instead of inside it. */
+    margin-bottom: var(--sidebar-footer-height, 0px);
 }

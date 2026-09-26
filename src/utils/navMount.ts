@@ -88,13 +88,24 @@ function getSidebarFooter(scrollRoot: Element): SidebarFooter | null {
     const reserved = pxOf(getComputedStyle(owner).getPropertyValue(SIDEBAR_FOOTER_VAR))
     if (!Number.isFinite(reserved) || reserved <= 0) return null
 
-    const group = Array.from(owner.querySelectorAll<HTMLElement>('*')).find((element) => {
+    // Matching the reserved height exactly proved brittle — any scaling makes the
+    // rendered height and the declared value disagree. Take the outermost
+    // bottom-anchored group instead: rendered, holding a control of its own, and
+    // small enough to be a footer rather than the whole sidebar.
+    const ownerHeight = owner.getBoundingClientRect().height
+    const candidates = Array.from(owner.querySelectorAll<HTMLElement>('*')).filter((element) => {
         if (element.contains(scrollRoot) || scrollRoot.contains(element)) return false
         if (element.getClientRects().length === 0) return false
         const style = getComputedStyle(element)
         if (style.position !== 'absolute' || pxOf(style.bottom) !== 0) return false
-        return Math.abs(element.getBoundingClientRect().height - reserved) <= 1
+        if (!element.querySelector('button, [role="button"], a[href]')) return false
+        const height = element.getBoundingClientRect().height
+        return height > 0 && (ownerHeight <= 0 || height <= ownerHeight * 0.4)
     })
+    const group = candidates.reduce<HTMLElement | null>((best, element) => {
+        if (!best) return element
+        return element.getBoundingClientRect().height > best.getBoundingClientRect().height ? element : best
+    }, null)
     if (!group) return null
 
     return { group, owner, reserved }
