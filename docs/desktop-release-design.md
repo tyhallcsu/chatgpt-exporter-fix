@@ -226,10 +226,17 @@ Windows artifacts are built on Windows. Nothing cross-compiles an installer.
 `collect-artifacts.mjs` refuses anything it cannot confirm:
 
 * every file is at least 1 MiB — a stub with the right extension fails;
-* the Windows binary's COFF machine type must be `0x8664`;
+* the **portable** Windows executable's COFF machine type must be `0x8664`;
 * the macOS binary's Mach-O fat header must carry both `x86_64` and `arm64`;
 * the `.app`'s `Info.plist` must carry the configured version;
 * exactly one bundle must match in each bundler output directory.
+
+The architecture check deliberately reads the portable `.exe` and not the NSIS
+installer. An NSIS stub is a 32-bit image — the published
+`ChatGPT-Exporter-Setup-2.36.2-windows-x64.exe` reports COFF machine `0x14c` —
+whatever architecture it carries inside, so checking *it* would either fail
+every x64 build or prove nothing. The portable executable is the same binary
+the installer unpacks, so measuring it measures what gets installed.
 
 The workflow adds, on Windows, the version resource read back out of the built
 `.exe`, and on both platforms a launch test that starts the app and fails if it
@@ -248,6 +255,19 @@ SHA256SUMS.txt
 
 The version in these names is the **userscript** version, which is also the app
 version. The packaging revision lives in the tag.
+
+### What is reproducible, and what is not
+
+The userscript is. The same commit built on Ubuntu, macOS and Windows produced
+byte-identical output — `9daa710bc102bb5dc62f574958581efd2029ea68cd5f6fb60ac7d3bfe8475f93`
+on all three — which is what makes the release job's cross-job hash check a real
+check rather than a formality. The Windows runner disables `core.autocrlf`
+before checkout to keep it that way.
+
+The installers are not, and are not claimed to be. A `.dmg` embeds creation
+timestamps and filesystem metadata, so the same source produces a different
+image hash on every run. Verify an installer against the `SHA256SUMS.txt`
+published beside it, not against a hash from another build.
 
 ### Versioning
 
