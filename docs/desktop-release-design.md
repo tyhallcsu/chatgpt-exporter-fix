@@ -279,16 +279,47 @@ window shows both numbers side by side.
 A packaging-only change bumps the last component. A new userscript version
 resets it to `.1`.
 
+### Visibility
+
+The fork was private through the 2.36.1 and 2.36.2 reconciliations, and
+`b9f5cd4` on `master` recorded that decision. It was reversed on 2026-09-26,
+immediately after `desktop-v2.36.2.1` shipped, so that collaborators and users
+could reach the installers without being added to the repository one at a time —
+GitHub has no way to publish a single release from a private repository.
+
+Publication was preceded by a scan of all 665 commits for private keys, personal
+access tokens, cloud and Slack credentials, JWTs, ChatGPT conversation
+identifiers and browser profile data. It found none. The one piece of
+local-machine detail in tracked content — an absolute worktree path carrying a
+macOS account name — was rewritten as `~/`-relative in `f48f220` beforehand.
+Three older commits still contain the absolute form; history was deliberately
+not rewritten, because that would invalidate the source commit recorded in the
+release and in every artifact's provenance record, to hide a home-directory
+name.
+
+Going public also removes the Actions billing pressure this design note worried
+about: public repositories do not consume the account's minute allowance, so the
+10× macOS multiplier no longer applies.
+
 ### Update behaviour
 
 None automatic. The updater artifacts Tauri can generate are switched off
 (`createUpdaterArtifacts: false`). The *Check for a newer release* button asks
 the GitHub releases API and reports what it gets.
 
-Because this repository is **private**, that endpoint returns 404 to anyone
-without access, and the app says so plainly — "no public release feed, this
-build comes from a private repository" — rather than reporting a failure. If the
-repository is ever made public the same button starts working with no change.
+The repository is **public** as of `desktop-v2.36.2.1`, so the endpoint answers
+anonymously and the button reports the real latest tag. Verified without any
+credential:
+
+```console
+$ curl -sS https://api.github.com/repos/tyhallcsu/chatgpt-exporter-fix/releases/latest
+tag: desktop-v2.36.2.1   assets: 6
+```
+
+The 404 path is still handled and still worth keeping: it is what a fork of this
+repository sees while it is private, and what anyone sees if the releases are
+ever withdrawn. In that case the app says "no public release feed, this build
+comes from a private repository" rather than reporting a failure.
 
 ### Signing
 

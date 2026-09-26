@@ -30,4 +30,4 @@ strip = true
 # `panic = "abort"` would shave a little more off the binary, but it also makes
 # `cargo test --release` impossible. Running the tests in the release profile
 # lets them reuse the dependencies the bundle already compiled, which is worth
-# far more than the bytes — on a private repo a macOS CI minute bills at 10x.
+# far more than the bytes: it saves a whole second compile of the Tauri tree.
