@@ -133,3 +133,43 @@ export async function closeBrowser() {
     await sleep(1500)
     return true
 }
+
+/**
+ * Page-side helper that finds the exporter's mounted menu containers, whichever
+ * build is running.
+ *
+ * `data-ce-mount` only exists on the private 2.36.1 review build, so keying on it
+ * would silently report "not mounted" for official upstream and make any
+ * head-to-head comparison meaningless. `.ce-nav-trigger` is the launcher's own
+ * class in both, and `getMenuContainer()` gives the container it renders into an
+ * inline `z-index: 99` in both — so the container is the nearest ancestor with
+ * that inline value. `strategy` falls back to naming the host surface when the
+ * build does not label its own mount.
+ *
+ * Inject with `${CE_MOUNTS_JS}` at the top of an evaluated body; it defines
+ * `ceMounts()` and `ceStrategy(mount)`.
+ */
+export const CE_MOUNTS_JS = `
+    function ceMounts() {
+        const containerOf = (trigger) => {
+            for (let e = trigger; e; e = e.parentElement) {
+                if (e.hasAttribute && e.hasAttribute('data-ce-mount')) return e;
+                if (e.style && e.style.zIndex === '99') return e;
+            }
+            return trigger.parentElement || trigger;
+        };
+        const seen = new Set();
+        return [...document.querySelectorAll('.ce-nav-trigger')]
+            .map(containerOf)
+            .filter(e => !seen.has(e) && seen.add(e));
+    }
+    function ceStrategy(mount) {
+        if (!mount) return null;
+        const labelled = mount.getAttribute && mount.getAttribute('data-ce-mount');
+        if (labelled) return labelled;
+        if (mount.closest('[data-app-navigation-rail]')) return 'upstream:nav-rail';
+        if (mount.closest('nav')) return 'upstream:sidebar';
+        if (mount.parentElement === document.body) return 'upstream:body';
+        return 'upstream:other';
+    }
+`

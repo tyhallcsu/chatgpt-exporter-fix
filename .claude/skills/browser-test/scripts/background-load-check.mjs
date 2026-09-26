@@ -8,7 +8,7 @@
 // drives `visibilityState`. So the phases are *verified* rather than assumed:
 // the run reports the visibility it actually observed, and says so plainly if it
 // could not hold the tab hidden or could not make it visible again.
-import { openTab, sleep, socket, targets } from './manager.mjs'
+import { CE_MOUNTS_JS, openTab, sleep, socket, targets } from './manager.mjs'
 
 const HIDDEN_SETTLE_MS = Number(process.env.HIDDEN_SETTLE_MS || 15000)
 const VISIBLE_SETTLE_MS = Number(process.env.VISIBLE_SETTLE_MS || 20000)
@@ -16,14 +16,15 @@ const TARGET_URL = process.env.TARGET_URL || 'https://chatgpt.com/'
 const PORT = process.env.MANAGER_CDP_PORT || 9333
 
 const PROBE = `
-    const mounts = [...document.querySelectorAll('[data-ce-mount]')];
+    ${CE_MOUNTS_JS}
+    const mounts = ceMounts();
     const usable = mounts.filter(m => m.getClientRects().length > 0 && m.getBoundingClientRect().height > 0);
     const sidebar = document.querySelector('[data-app-action-sidebar-scroll]');
     return {
         visibility: document.visibilityState,
         mounts: mounts.length,
         usable: usable.length,
-        strategies: mounts.map(m => m.getAttribute('data-ce-mount')),
+        strategies: mounts.map(ceStrategy),
         sidebarRendered: !!sidebar && sidebar.getClientRects().length > 0,
     };
 `

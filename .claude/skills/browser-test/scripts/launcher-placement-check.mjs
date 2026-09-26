@@ -2,7 +2,7 @@
 //
 //   node launcher-placement-check.mjs [outDir]
 //
-// "One [data-ce-mount] with a positive box" is not the question — an element can
+// "One mounted container with a positive box" is not the question — an element can
 // satisfy all of that while sitting on top of the account row, which is exactly
 // the defect this checks for. Every case therefore measures pixel overlap against
 // the sidebar's other interactive controls, hit-tests the launcher's interior, and
@@ -12,7 +12,7 @@
 // viewport at a higher device scale factor — and is labelled as emulated.
 import fs from 'node:fs'
 import path from 'node:path'
-import { sleep, socket, targets } from './manager.mjs'
+import { CE_MOUNTS_JS, sleep, socket, targets } from './manager.mjs'
 
 const OUT = process.argv[2] || path.join(process.env.TMPDIR || '/tmp', 'launcher-placement')
 fs.mkdirSync(OUT, { recursive: true })
@@ -22,10 +22,16 @@ const MEASURE = `
     const box = (e) => { if (!e) return null; const b = e.getBoundingClientRect(); return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height), top: b.top, bottom: b.bottom, left: b.left, right: b.right } };
     const overlapPx = (a, b) => { if (!a || !b) return 0; const ix = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)); const iy = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)); return Math.round(ix * iy) };
 
-    const mounts = [...document.querySelectorAll('[data-ce-mount]')];
-    const mount = mounts[0];
+    ${CE_MOUNTS_JS}
+    const mounts = ceMounts();
+    // Upstream mounts a menu in the expanded sidebar *and* in the rail and lets
+    // the shell hide whichever is inactive, so "two mounts" is by design and
+    // mounts[0] is routinely the hidden one. Measure the rendered mount — the
+    // one a person can actually see and click.
+    const renderedMounts = mounts.filter(rendered);
+    const mount = renderedMounts[0] || mounts[0];
     if (!mount) return { mountCount: 0 };
-    const trigger = mount.querySelector('[role="button"]') || mount.firstElementChild || mount;
+    const trigger = mount.querySelector('.ce-nav-trigger') || mount.querySelector('[role="button"]') || mount.firstElementChild || mount;
     const trig = box(trigger);
 
     // Everything interactive in the sidebar that is not ours, ignoring pure
@@ -80,7 +86,8 @@ const MEASURE = `
         viewport: innerWidth + 'x' + innerHeight,
         dpr: devicePixelRatio,
         mountCount: mounts.length,
-        strategy: mount.getAttribute('data-ce-mount'),
+        renderedMountCount: renderedMounts.length,
+        strategy: ceStrategy(mount),
         accessibleName: trigger.getAttribute('aria-label') || trigger.getAttribute('title') || (trigger.innerText || '').trim() || null,
         launcher: trig && { at: trig.x + ',' + trig.y, size: trig.w + 'x' + trig.h },
         launcherVisible: !!(trig && trig.w > 2 && trig.h > 2 && trig.bottom <= innerHeight + 1 && trig.top >= -1),
@@ -97,7 +104,8 @@ const MENU = `
     const card = document.querySelector('.ce-card') || (items[1] && items[1].closest('[data-radix-popper-content-wrapper], .ce-card'));
     if (!card) return { open: false, itemCount: items.length };
     const b = card.getBoundingClientRect();
-    const trigger = document.querySelector('[data-ce-mount] [role="button"]');
+    const triggers = [...document.querySelectorAll('.ce-nav-trigger')];
+    const trigger = triggers.find(t => t.getClientRects().length > 0) || triggers[0] || null;
     const tb = trigger ? trigger.getBoundingClientRect() : null;
     const exportAll = items.find(e => (e.innerText || '').trim() === 'Export All');
     const eb = exportAll ? exportAll.getBoundingClientRect() : null;
@@ -130,7 +138,8 @@ const SCROLL_END = `
     const last = items[items.length - 1];
     if (!last) return { applicable: false };
     const lb = last.getBoundingClientRect(), sb = s.getBoundingClientRect();
-    const mount = document.querySelector('[data-ce-mount]');
+    ${CE_MOUNTS_JS}
+    const mount = ceMounts().filter(rendered)[0] || ceMounts()[0];
     const hit = document.elementFromPoint(lb.x + lb.width / 2, lb.y + lb.height / 2);
     return {
         applicable: true,
@@ -153,21 +162,47 @@ async function shoot(name) {
     fs.writeFileSync(path.join(OUT, `${name}.png`), Buffer.from(result.data, 'base64'))
 }
 
+/**
+ * Escape, but only when there is a menu to close.
+ *
+ * At drawer widths Escape also closes ChatGPT's sidebar drawer, so sending it
+ * unconditionally after opening the drawer closed it again and the case measured
+ * "narrow, drawer shut" while calling itself "drawer open".
+ */
 async function closeMenu() {
+    const open = await c.run(`
+        const card = document.querySelector('.ce-card');
+        return !!(card && card.getClientRects().length > 0);
+    `)
+    if (!open) return
     await c.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
     await c.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
     await sleep(900)
 }
 
+/**
+ * Puts the sidebar into the requested state and reports the state it ended in.
+ *
+ * Two traps, both of which silently mislabel a case:
+ * ChatGPT keeps a hidden copy of the toggle in the shell it is not showing, so a
+ * plain `querySelector` can click an invisible button, and at drawer widths the
+ * synthetic `.click()` does nothing at all — the drawer only opens for a trusted
+ * event. So: rendered elements only, a real CDP click, and the result verified.
+ */
 async function setSidebar(expanded) {
     const label = expanded ? 'Show sidebar' : 'Hide sidebar'
-    await c.run(`
-        const b = [...document.querySelectorAll('button,[role=button]')]
-            .find(e => (e.getAttribute('aria-label') || '') === ${JSON.stringify(label)} && e.getClientRects().length);
-        if (b) b.click();
-        return !!b;
-    `)
+    const find = `[...document.querySelectorAll('button,[role=button]')]
+        .find(e => (e.getAttribute('aria-label') || '') === ${JSON.stringify(label)} && e.getClientRects().length > 0)`
+    await c.realClick(find).catch(() => {})
     await sleep(3000)
+    return c.run(`
+        const scroll = document.querySelector('[data-app-action-sidebar-scroll]');
+        const rail = document.querySelector('[data-app-navigation-rail]');
+        return {
+            sidebarRendered: !!scroll && scroll.getClientRects().length > 0,
+            railRendered: !!rail && rail.getClientRects().length > 0,
+        };
+    `)
 }
 
 const CASES = [
@@ -198,8 +233,11 @@ await sleep(2500)
 await c.send('Page.bringToFront')
 await sleep(9000)
 const live = await c.run(`
-    const mount = document.querySelector('[data-ce-mount]');
-    return { mounted: !!mount, strategy: mount && mount.getAttribute('data-ce-mount') };
+    ${CE_MOUNTS_JS}
+    const rendered = e => e && e.getClientRects().length > 0;
+    const mounts = ceMounts();
+    const mount = mounts.filter(rendered)[0] || mounts[0];
+    return { mounted: !!mount, rendered: mounts.filter(rendered).length, strategy: ceStrategy(mount) };
 `)
 console.log(`reloaded; exporter mounted=${live.mounted} strategy=${live.strategy}`)
 if (!live.mounted) throw new Error('the exporter did not mount after reload — nothing to measure')
@@ -207,8 +245,25 @@ if (!live.mounted) throw new Error('the exporter did not mount after reload — 
 const results = []
 for (const kase of selected) {
   try {
-    await c.send('Browser.setWindowBounds', { windowId: win.windowId, bounds: { windowState: 'normal', left: 20, top: 40, width: kase.width, height: kase.height } })
-    await sleep(1800)
+    // `Browser.setWindowBounds` is advisory on macOS: it is silently ignored often
+    // enough that a run can measure the *previous* case's viewport and label it
+    // with this case's name. Verify the width it actually produced, retry, and if
+    // it still will not take, record the case as not achieved rather than
+    // reporting a measurement of the wrong layout.
+    let achieved = null
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        await c.send('Browser.setWindowBounds', { windowId: win.windowId, bounds: { windowState: 'normal', left: 20, top: 40, width: kase.width, height: kase.height } })
+        await sleep(1800)
+        achieved = await c.run(`return { w: innerWidth, h: innerHeight }`)
+        // Chrome enforces a minimum window size, and the chrome around the
+        // viewport costs height, so only the width is held to the request.
+        if (Math.abs(achieved.w - kase.width) <= 8) break
+        // A large shrink in one step is the request most often dropped. Going out
+        // to a known-good size first and then in to the target reliably lands it.
+        await c.send('Browser.setWindowBounds', { windowId: win.windowId, bounds: { windowState: 'normal', left: 20, top: 40, width: 1440, height: 950 } })
+        await sleep(1200)
+    }
+    const viewportAchieved = Math.abs(achieved.w - kase.width) <= 8
     // Zoom via CSS `zoom` on the root: it shrinks the layout viewport in CSS px
     // exactly as browser page zoom does. A device-metrics override was tried first
     // and wedged the renderer, so this is the emulation actually used.
@@ -216,20 +271,24 @@ for (const kase of selected) {
     if (kase.zoom !== 1) await sleep(2000)
     await c.send('Page.bringToFront')
     await closeMenu()
-    await setSidebar(kase.expanded)
+    const sidebarState = await setSidebar(kase.expanded)
     await closeMenu()
 
     const closed = await c.run(MEASURE)
     await shoot(`${kase.name}-closed`)
     const scrollEnd = await c.run(SCROLL_END)
 
-    await c.realClick(`(() => { const m = document.querySelector('[data-ce-mount]'); return m.querySelector('[role="button"]') || m.firstElementChild; })()`).catch(() => {})
+    await c.realClick(`(() => { const t = [...document.querySelectorAll('.ce-nav-trigger')]; return t.find(e => e.getClientRects().length > 0) || t[0]; })()`).catch(() => {})
     await sleep(1800)
     const open = await c.run(MENU)
     await shoot(`${kase.name}-open`)
     await closeMenu()
 
-    const pass = closed.mountCount === 1
+    // Exactly one *visible* launcher. Upstream keeps a second menu mounted in the
+    // shell it is currently hiding, which costs the user nothing; two on screen
+    // at once would be the defect.
+    const pass = viewportAchieved
+        && closed.renderedMountCount === 1
         && closed.launcherVisible
         && closed.collisions.length === 0
         && closed.hitTestAllOurs
@@ -239,11 +298,13 @@ for (const kase of selected) {
         && open.exportAllReachable
         && (scrollEnd.applicable === false || (scrollEnd.lastItemFullyVisible && scrollEnd.lastItemUncovered))
 
-    results.push({ case: kase.name, zoom: kase.zoom, pass, closed, open, scrollEnd })
+    results.push({ case: kase.name, zoom: kase.zoom, pass, requested: `${kase.width}x${kase.height}`, viewportAchieved, sidebarState, closed, open, scrollEnd })
     // Written after every case: a later hang must not lose what is already measured.
     fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify(results, null, 2))
     console.log(`\n=== ${kase.name}${kase.zoom !== 1 ? ` (zoom ${kase.zoom * 100}%, emulated)` : ''} → ${pass ? 'PASS' : 'FAIL'} ===`)
-    console.log(`  viewport ${closed.viewport} dpr ${closed.dpr} | mounts ${closed.mountCount} | strategy ${closed.strategy} | name "${closed.accessibleName}"`)
+    if (!viewportAchieved) console.log(`  NOT MEASURED: asked for ${kase.width} CSS px wide, the window would only go to ${achieved.w}`)
+    console.log(`  viewport ${closed.viewport} dpr ${closed.dpr} | mounts ${closed.mountCount} (rendered ${closed.renderedMountCount}) | strategy ${closed.strategy} | name "${closed.accessibleName}"`)
+    console.log(`  sidebar rendered=${sidebarState.sidebarRendered} rail rendered=${sidebarState.railRendered}`)
     console.log(`  launcher ${closed.launcher ? closed.launcher.at + ' ' + closed.launcher.size : 'none'} visible=${closed.launcherVisible} hitTestAllOurs=${closed.hitTestAllOurs}`)
     console.log(`  collisions: ${closed.collisions.length ? JSON.stringify(closed.collisions) : 'none'}`)
     console.log(`  menu: within=${open.withinViewport} scrollable=${open.scrollable} gap=${open.adjacentToTrigger} exportAllReachable=${open.exportAllReachable} overflow=${JSON.stringify(open.overflow)}`)
