@@ -13,54 +13,14 @@ import {
     getNavMenuMounts,
 } from './utils/navMount'
 import type { NavMenuMount } from './utils/navMount'
+import { whenShellSettled } from './utils/shellSettle'
 import { onloadSafe } from './utils/utils'
 
 import './i18n'
 import './styles/missing-tailwind.css'
 
-/** How long the shell must stop mutating before the first injection. */
-const SHELL_QUIET_MS = 400
-/** Upper bound on waiting, for pages that never fall completely quiet. */
-const SHELL_SETTLE_TIMEOUT_MS = 4000
 /** The rendered conversation block that carries its message ids. */
 const MESSAGE_UNIT_SELECTOR = '[data-chatgpt-conversation-selection-target] [data-chatgpt-search-message-ids]'
-
-/**
- * ChatGPT server-renders its shell and hydrates it after load. Inserting into a
- * container React is still hydrating makes it report a hydration mismatch
- * (#418), throw the server markup away and re-render — destroying the menu we
- * just mounted. `load` alone is not late enough because React Router keeps
- * hydrating route chunks after it; waiting for the DOM itself to go quiet is,
- * and needs no knowledge of ChatGPT's internals.
- */
-function whenShellSettled(callback: () => void) {
-    const start = () => {
-        let quietTimer: ReturnType<typeof setTimeout>
-        let capTimer: ReturnType<typeof setTimeout>
-        let done = false
-
-        const observer = new MutationObserver(() => {
-            clearTimeout(quietTimer)
-            quietTimer = setTimeout(finish, SHELL_QUIET_MS)
-        })
-
-        function finish() {
-            if (done) return
-            done = true
-            clearTimeout(quietTimer)
-            clearTimeout(capTimer)
-            observer.disconnect()
-            requestAnimationFrame(callback)
-        }
-
-        capTimer = setTimeout(finish, SHELL_SETTLE_TIMEOUT_MS)
-        quietTimer = setTimeout(finish, SHELL_QUIET_MS)
-        observer.observe(document.body, { childList: true, subtree: true })
-    }
-
-    if (document.readyState === 'complete') start()
-    else window.addEventListener('load', start, { once: true })
-}
 
 main()
 

@@ -7,6 +7,9 @@ import { blobToDataURL } from './utils/dom'
 import { getCachedImage, setCachedImage } from './utils/imageCache'
 import { memorize } from './utils/memorize'
 import { getModelName } from './utils/model'
+import { RateLimitError } from './utils/rateLimit'
+
+export { RateLimitError } from './utils/rateLimit'
 
 // urlcat ships CommonJS with `exports.default`. Because this package is
 // `"type": "module"`, vite 8 (rolldown) applies Node's interop and hands the
@@ -726,22 +729,6 @@ export async function deleteConversation(chatId: string): Promise<boolean> {
         body: JSON.stringify({ is_visible: false }),
     })
     return success
-}
-
-/**
- * Thrown when the API responds with 429 Too Many Requests.
- * Carries the wait time from the `Retry-After` header (or a safe default).
- */
-export class RateLimitError extends Error {
-    /** Milliseconds to wait before retrying */
-    readonly retryAfterMs: number
-    constructor(retryAfterHeader: string | null) {
-        super('Too Many Requests (429)')
-        this.name = 'RateLimitError'
-        const secs = retryAfterHeader != null ? Number.parseInt(retryAfterHeader, 10) : Number.NaN
-        // Default to 30 s if the header is missing or unparseable
-        this.retryAfterMs = Number.isFinite(secs) && secs > 0 ? secs * 1000 : 30_000
-    }
 }
 
 /** Header names ChatGPT might use for rate-limit signalling */

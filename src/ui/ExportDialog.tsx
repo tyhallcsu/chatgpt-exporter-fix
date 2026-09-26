@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { useTranslation } from 'react-i18next'
 import type { ChangeEvent } from 'preact/compat'
 import { archiveConversation, deleteConversation, fetchAllConversations, fetchConversation, fetchConversationsPage, fetchProjects, probeApi, withImageAssets } from '../api'
+import { describeListError } from '../utils/rateLimit'
 import { EXPORT_OPERATION_BATCH, KEY_EXPORTED_UPDATE_TIMES } from '../constants'
 import { exportAllToHtml } from '../exporter/html'
 import { exportAllToJson, exportAllToOfficialJson } from '../exporter/json'
@@ -736,7 +737,14 @@ const DialogContent: FC<DialogContentProps> = ({ format }) => {
                 loadedHasMore = hasMore
                 if (alive()) setHasMore(hasMore)
             },
-            () => { loadFailed = true },
+            (err) => {
+                loadFailed = true
+                // `fetchAllConversations` resolves with whatever it managed to
+                // collect, so the promise's `catch` never sees this. Without
+                // surfacing it here a throttled load renders as `0 / 0`, which
+                // is indistinguishable from an account with no conversations.
+                if (alive()) setError(describeListError(err))
+            },
         )
             .then((items) => {
                 // A list cut short by an error would hide its tail until reload
