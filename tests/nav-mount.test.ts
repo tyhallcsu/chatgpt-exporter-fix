@@ -166,6 +166,22 @@ describe('getNavMenuMounts', () => {
         expect(mounted()[0].getAttribute(MOUNT_ATTRIBUTE)).toBe('nav-rail')
     })
 
+    it('uses its own launcher when the page is laid out but every anchor is hidden', () => {
+        // Regression: the narrow/mobile shell with the drawer closed. The rail is
+        // in the DOM at zero size, so the rail strategy mounted a 0x0 launcher
+        // instead of letting the floating one take over.
+        document.body.innerHTML = COLLAPSED_PANEL_WITH_VISIBLE_RAIL
+        withLayout()
+        hide(document.querySelector('.collapsed-panel')!)
+        hide(document.querySelector('.visible-rail')!)
+
+        mountAll()
+
+        expect(mounted()).toHaveLength(1)
+        expect(mounted()[0].getAttribute(MOUNT_ATTRIBUTE)).toBe('floating')
+        expect(document.getElementById(FLOATING_HOST_ID)).not.toBeNull()
+    })
+
     it('keeps every candidate when nothing reports a size', () => {
         // No layout information at all — first paint, or a detached document.
         // Dropping everything here would mean never mounting.
