@@ -226,22 +226,38 @@ jobs:
         # anyway, rather than compiling the whole tree a second time in dev.
         run: cargo test --release
 
-      - name: Build the installers
+      # Two steps, not one with conditional `env:`. An `env:` entry whose secret
+      # does not exist is still *defined*, as the empty string, and the bundler
+      # tests those variables for presence rather than for content: an empty
+      # `APPLE_CERTIFICATE` sends it into `security import` with nothing to
+      # import, and the build dies there. The unsigned path below never sees a
+      # signing variable at all.
+      - name: Build the installers (unsigned)
+        if: steps.signing.outputs.signed != 'true'
         shell: bash
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-          DESKTOP_BUILD_SIGNED: ${{ steps.signing.outputs.signed }}
+          DESKTOP_BUILD_SIGNED: 'false'
+        run: pnpm --dir desktop exec tauri build ${{ matrix.build-args }}
+
+      - name: Build the installers (signed)
+        if: steps.signing.outputs.signed == 'true'
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          DESKTOP_BUILD_SIGNED: 'true'
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
         run: |
           set -eu
-          if [ "${{ matrix.platform }}" = "windows" ] && [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+          if [ "${{ matrix.platform }}" = "windows" ]; then
             pnpm --dir desktop exec tauri build ${{ matrix.build-args }} \
-              --config "{\"bundle\":{\"windows\":{\"certificateThumbprint\":\"${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}\",\"timestampUrl\":\"http://timestamp.digicert.com\"}}}"
+              --config "{\"bundle\":{\"windows\":{\"certificateThumbprint\":\"${WINDOWS_CERTIFICATE_THUMBPRINT}\",\"timestampUrl\":\"http://timestamp.digicert.com\"}}}"
           else
             pnpm --dir desktop exec tauri build ${{ matrix.build-args }}
           fi

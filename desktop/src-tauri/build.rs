@@ -21,5 +21,10 @@ fn main() {
         println!("cargo:rerun-if-changed={}", path.display());
     }
 
+    // `main.rs` reads this with `option_env!` to decide whether it may say the
+    // build is signed. Rebuild when it changes so a signed build can never
+    // inherit an unsigned binary from the cache.
+    println!("cargo:rerun-if-env-changed=DESKTOP_BUILD_SIGNED");
+
     tauri_build::build()
 }
