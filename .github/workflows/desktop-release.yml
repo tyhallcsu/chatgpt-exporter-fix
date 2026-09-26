@@ -1,0 +1,435 @@
+name: Desktop release
+
+# Packaging only. The userscript's own Check/Release workflows are untouched:
+# this one never commits, never tags the userscript, and never publishes to a
+# userscript host. It builds the desktop installers and, on a `desktop-v*` tag,
+# attaches them to a GitHub Release.
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/desktop-release.yml'
+      - 'src/**'
+      - 'vite.config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The repository pins this in `packageManager`; set it here too so a runner
+  # image bump can never silently move the build to a different pnpm.
+  PNPM_VERSION: 8.14.1
+  NODE_VERSION: '24'
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The product itself: lint, test and build the userscript the desktop app will
+  # carry. This job's artifact is the canonical one; the platform jobs rebuild
+  # it and the release job checks that all three agree.
+  # ---------------------------------------------------------------------------
+  userscript:
+    name: Userscript
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.build.outputs.version }}
+      sha256: ${{ steps.build.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Confirm the pinned pnpm is the one running
+        run: |
+          set -eu
+          actual="$(pnpm --version)"
+          echo "pnpm $actual"
+          [ "$actual" = "${PNPM_VERSION}" ] || { echo "expected pnpm ${PNPM_VERSION}"; exit 1; }
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run lint
+
+      - run: pnpm run test
+
+      - name: Build and hash the userscript
+        id: build
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -eu
+          pnpm run build
+          version="$(node -p "require('./package.json').version")"
+          sha256="$(shasum -a 256 dist/chatgpt.user.js | cut -d' ' -f1)"
+          header_version="$(grep -m1 '^// @version' dist/chatgpt.user.js | awk '{print $3}')"
+          [ "$header_version" = "$version" ] || {
+            echo "userscript header says $header_version, package.json says $version"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Userscript"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Version | \`$version\` |"
+            echo "| Source commit | \`$SOURCE_COMMIT\` |"
+            echo "| SHA-256 | \`$sha256\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: userscript
+          path: dist/chatgpt.user.js
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # One job per shipped OS. Windows is the authoritative Windows build; nothing
+  # here cross-compiles a Windows installer from anywhere else.
+  # ---------------------------------------------------------------------------
+  desktop:
+    name: ${{ matrix.label }}
+    needs: userscript
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            label: Windows x64
+            os: windows-latest
+            targets: ''
+            build-args: ''
+          - platform: macos
+            label: macOS universal
+            os: macos-latest
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+            build-args: '--target universal-apple-darwin'
+    steps:
+      # Must precede checkout: a CRLF rewrite of src/ would change the bundle
+      # and make this platform's userscript hash disagree with the others'.
+      - name: Keep line endings as committed
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Confirm the pinned pnpm is the one running
+        shell: bash
+        run: |
+          set -eu
+          actual="$(pnpm --version)"
+          echo "pnpm $actual"
+          [ "$actual" = "${PNPM_VERSION}" ] || { echo "expected pnpm ${PNPM_VERSION}"; exit 1; }
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+          key: ${{ matrix.platform }}
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -eu
+          pnpm install --frozen-lockfile
+          pnpm --dir desktop install --frozen-lockfile
+
+      - name: Decide whether signing credentials are present
+        id: signing
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
+        run: |
+          set -eu
+          if [ "${{ matrix.platform }}" = "macos" ] && [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ matrix.platform }}" = "windows" ] && [ -n "${WINDOWS_CERTIFICATE_THUMBPRINT:-}" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "No signing credentials for ${{ matrix.platform }} — producing an unsigned community build." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Import the Windows signing certificate
+        if: matrix.platform == 'windows' && steps.signing.outputs.signed == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pfx = Join-Path $env:RUNNER_TEMP 'signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password | Out-Null
+          Remove-Item $pfx -Force
+
+      - name: Stage the userscript
+        id: stage
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -eu
+          pnpm --dir desktop run prepare:userscript
+          pnpm --dir desktop run verify:userscript
+          sha256="$(node -p "require('./desktop/src-tauri/userscript/metadata.json').userscriptSha256")"
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+          echo "staged userscript sha256=$sha256"
+
+      - name: Check this build's userscript against the canonical one
+        shell: bash
+        run: |
+          set -eu
+          expected='${{ needs.userscript.outputs.sha256 }}'
+          actual='${{ steps.stage.outputs.sha256 }}'
+          if [ "$expected" != "$actual" ]; then
+            echo "::warning::userscript rebuilt on ${{ matrix.platform }} hashes $actual, canonical build hashes $expected"
+          fi
+          echo "| ${{ matrix.label }} userscript | \`$actual\` |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test the desktop app
+        shell: bash
+        working-directory: desktop/src-tauri
+        # Release profile so these reuse the dependencies the bundle needs
+        # anyway, rather than compiling the whole tree a second time in dev.
+        run: cargo test --release
+
+      - name: Build the installers
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          DESKTOP_BUILD_SIGNED: ${{ steps.signing.outputs.signed }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -eu
+          if [ "${{ matrix.platform }}" = "windows" ] && [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+            pnpm --dir desktop exec tauri build ${{ matrix.build-args }} \
+              --config "{\"bundle\":{\"windows\":{\"certificateThumbprint\":\"${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}\",\"timestampUrl\":\"http://timestamp.digicert.com\"}}}"
+          else
+            pnpm --dir desktop exec tauri build ${{ matrix.build-args }}
+          fi
+
+      - name: Verify and name the artifacts
+        shell: bash
+        run: |
+          set -eu
+          node desktop/scripts/collect-artifacts.mjs ${{ matrix.platform }}
+          cp desktop/src-tauri/userscript/metadata.json desktop/artifacts/userscript-metadata.json
+          echo '${{ steps.signing.outputs.signed }}' > desktop/artifacts/signed.txt
+
+      - name: Read the version recorded inside the Windows binaries
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = (Get-Content desktop/src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $exe = Get-ChildItem desktop/artifacts -Filter 'ChatGPT-Exporter-Portable-*.exe' | Select-Object -First 1
+          $recorded = $exe.VersionInfo.ProductVersion
+          Write-Host "portable exe reports version $recorded (expected $expected)"
+          if (-not $recorded.StartsWith($expected)) {
+            throw "embedded version '$recorded' does not match '$expected'"
+          }
+
+      - name: Smoke test — the app starts and stays up
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Get-ChildItem desktop/artifacts -Filter 'ChatGPT-Exporter-Portable-*.exe' | Select-Object -First 1).FullName
+          $process = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 20
+          if ($process.HasExited) {
+            throw "the app exited on its own with code $($process.ExitCode)"
+          }
+          Write-Host "still running after 20s — stopping it"
+          Stop-Process -Id $process.Id -Force
+
+      - name: Smoke test — the app starts and stays up
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          set -eu
+          app="$(find desktop/src-tauri/target/universal-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)"
+          "$app/Contents/MacOS/chatgpt-exporter-desktop" &
+          pid=$!
+          sleep 20
+          if ! kill -0 "$pid" 2>/dev/null; then
+            echo "the app exited on its own"
+            exit 1
+          fi
+          echo "still running after 20s — stopping it"
+          kill "$pid"
+
+      - name: Summarise
+        shell: bash
+        run: |
+          set -eu
+          {
+            echo "### ${{ matrix.label }}"
+            echo
+            echo "| Artifact | Size | SHA-256 |"
+            echo "| --- | ---: | --- |"
+            node -e "
+              const m = require('./desktop/artifacts/manifest.json');
+              for (const a of m.artifacts) {
+                console.log('| \`' + a.name + '\` | ' + (a.bytes / 1048576).toFixed(2) + ' MB | \`' + a.sha256 + '\` |');
+              }
+            "
+            echo
+            echo "Signed: \`${{ steps.signing.outputs.signed }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}
+          path: desktop/artifacts/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Tag pushes only. Everything attached here has already been verified by the
+  # job that produced it.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: [userscript, desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: incoming
+
+      - name: Assemble the release assets
+        id: assemble
+        run: |
+          set -eu
+          mkdir -p release
+          cp incoming/desktop-windows/ChatGPT-Exporter-*.exe release/
+          cp incoming/desktop-windows/ChatGPT-Exporter-*.msi release/
+          cp incoming/desktop-macos/ChatGPT-Exporter-*.dmg release/
+          cp incoming/userscript/chatgpt.user.js "release/chatgpt-exporter-${{ needs.userscript.outputs.version }}.user.js"
+
+          # Every platform rebuilt the userscript; they must agree, or the
+          # installers do not all carry the same product.
+          canonical='${{ needs.userscript.outputs.sha256 }}'
+          for meta in incoming/desktop-*/userscript-metadata.json; do
+            staged="$(node -p "require('./$meta').userscriptSha256")"
+            if [ "$staged" != "$canonical" ]; then
+              echo "::error::$meta carries userscript $staged but the canonical build is $canonical"
+              exit 1
+            fi
+          done
+
+          cd release
+          sha256sum -- ChatGPT-Exporter-* chatgpt-exporter-*.user.js > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Write the release notes
+        env:
+          USERSCRIPT_VERSION: ${{ needs.userscript.outputs.version }}
+          USERSCRIPT_SHA256: ${{ needs.userscript.outputs.sha256 }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          set -eu
+          windows_signed="$(cat incoming/desktop-windows/signed.txt)"
+          macos_signed="$(cat incoming/desktop-macos/signed.txt)"
+          {
+            echo "Desktop installers for the private ChatGPT Exporter repair fork."
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Upstream userscript | \`v${USERSCRIPT_VERSION}\` (pionxzh/chatgpt-exporter) |"
+            echo "| Desktop packaging | \`${{ github.ref_name }}\` |"
+            echo "| Source commit | \`${SOURCE_COMMIT}\` |"
+            echo "| Bundled userscript SHA-256 | \`${USERSCRIPT_SHA256}\` |"
+            echo
+            echo "### Downloads"
+            echo
+            echo "* **Windows** — \`ChatGPT-Exporter-Setup-${USERSCRIPT_VERSION}-windows-x64.exe\` (installer), or the portable \`.exe\` if you would rather not install."
+            echo "* **macOS** — \`ChatGPT-Exporter-${USERSCRIPT_VERSION}-macos-universal.dmg\` (Apple silicon and Intel in one image)."
+            echo "* Userscript only — \`chatgpt-exporter-${USERSCRIPT_VERSION}.user.js\`, for people who do not want the helper."
+            echo
+            echo "Verify any download against \`SHA256SUMS.txt\`."
+            echo
+            echo "### What the desktop app is"
+            echo
+            echo "An installer for the userscript, not a ChatGPT client. It serves the bundled"
+            echo "script from \`127.0.0.1\` and opens your browser there so your userscript"
+            echo "manager shows its own install page. It never reads a browser profile, cookie"
+            echo "store or session, and never signs in to ChatGPT."
+            echo
+            echo "### Signing"
+            echo
+            echo "| Platform | Code signing |"
+            echo "| --- | --- |"
+            echo "| Windows | ${windows_signed} |"
+            echo "| macOS | ${macos_signed} |"
+            echo
+            if [ "$macos_signed" != "true" ] || [ "$windows_signed" != "true" ]; then
+              echo "Unsigned builds are community builds. On macOS, Gatekeeper refuses the first"
+              echo "launch: open the app from Finder's context menu with *Open*, or allow it under"
+              echo "System Settings › Privacy & Security. On Windows, SmartScreen shows"
+              echo "*More info → Run anyway*. Check the SHA-256 before you do either."
+              echo
+            fi
+            echo "### Upstream"
+            echo
+            echo "ChatGPT Exporter is by [pionxzh](https://github.com/pionxzh/chatgpt-exporter), MIT licensed."
+            echo "This fork carries upstream v${USERSCRIPT_VERSION} plus upstream PR #400, which surfaces"
+            echo "conversation-list errors in Export All and is still open upstream. When it merges,"
+            echo "this fork's product delta returns to zero."
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          gh release create "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --title "Desktop ${{ github.ref_name }}" \
+            --notes-file release-notes.md \
+            --verify-tag \
+            release/*
