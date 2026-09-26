@@ -44,6 +44,35 @@ English &nbsp;&nbsp;|&nbsp;&nbsp; [Français](./README_FR.md) &nbsp;&nbsp;|&nbsp
 
 > Make sure that the [`Allow User Scripts` is enabled](https://www.tampermonkey.net/faq.php?q=Q209) in your browser settings for Tampermonkey.
 
+### Desktop installer — this fork only
+
+<div align="left">
+
+A small helper app that carries a verified copy of the userscript and hands it to
+your userscript manager, so you can see the version and SHA-256 of what you are
+installing. It is an installer, not a ChatGPT client — the exporter still runs as
+a userscript in your own browser.
+
+Download from [**Releases**](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases):
+
+| You have | Download |
+| --- | --- |
+| **Windows** 10 / 11 | `ChatGPT-Exporter-Setup-<version>-windows-x64.exe` |
+| Windows, no install wanted | `ChatGPT-Exporter-Portable-<version>-windows-x64.exe` |
+| Windows, managed deployment | `ChatGPT-Exporter-<version>-windows-x64.msi` |
+| **macOS** 10.15+, any Mac | `ChatGPT-Exporter-<version>-macos-universal.dmg` |
+
+These builds are **not code-signed**, so macOS Gatekeeper and Windows SmartScreen
+will both ask before the first launch. Check your download against
+`SHA256SUMS.txt` on the release first. Details, and how signing gets turned on
+later, are in [`docs/desktop-release-design.md`](./docs/desktop-release-design.md).
+
+**The userscript-only install above stays fully supported** — nothing about the
+desktop helper is required, and it changes nothing about how the exporter works
+once installed. See [`desktop/README.md`](./desktop/README.md).
+
+</div>
+
 #
 
 [📚 Supported Formats](#-supported-formats) &nbsp;&nbsp;|&nbsp;&nbsp; [💡 Example](#-example) &nbsp;&nbsp;|&nbsp;&nbsp; [📤 Export Multiple Conversations](#-export-multiple-conversations) &nbsp;&nbsp;|&nbsp;&nbsp; [🤝 Contribution](#-contribution) &nbsp;&nbsp;|&nbsp;&nbsp; [⭐ Star History](#-star-history)
