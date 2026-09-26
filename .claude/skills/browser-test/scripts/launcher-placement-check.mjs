@@ -39,17 +39,32 @@ const MEASURE = `
     // genuinely on screen — hit-testable at its own centre — and ignore full-bleed
     // overlays and containers that merely enclose the launcher, since whether those
     // steal a click is what the hit test below measures.
-    const onScreen = (e) => {
-        const b = box(e);
-        if (!b || b.w < 2 || b.h < 2) return false;
-        const el = document.elementFromPoint(b.left + b.w / 2, b.top + b.h / 2);
-        return !!(el && (el === e || e.contains(el) || el.contains(e)));
+    // What matters is the pixels a person can see. A bounding rect keeps reporting
+    // the full element after a scroll container has clipped part or all of it, so
+    // overlap is computed against the rect intersected with every scrolling
+    // ancestor — the row that pokes six clipped pixels behind the launcher is not
+    // on screen there. Full-bleed overlays and enclosing containers are skipped
+    // too; whether they steal a click is what the hit test measures.
+    const visibleRect = (e) => {
+        let r = box(e);
+        if (!r) return null;
+        for (let p = e.parentElement; p; p = p.parentElement) {
+            const cs = getComputedStyle(p);
+            if (!/auto|scroll|hidden|clip/.test(cs.overflowY + cs.overflowX)) continue;
+            const pb = box(p);
+            if (!pb) continue;
+            const top = Math.max(r.top, pb.top), bottom = Math.min(r.bottom, pb.bottom);
+            const left = Math.max(r.left, pb.left), right = Math.min(r.right, pb.right);
+            if (bottom <= top || right <= left) return null;
+            r = { x: Math.round(left), y: Math.round(top), w: Math.round(right - left), h: Math.round(bottom - top), top, bottom, left, right };
+        }
+        return r;
     };
     const encloses = (a, b) => a && b && a.left <= b.left + 1 && a.right >= b.right - 1 && a.top <= b.top + 1 && a.bottom >= b.bottom - 1;
     const collisions = others
-        .map(e => ({ el: e, name: e.getAttribute('aria-label') || (e.innerText || '').trim().slice(0, 18) || e.tagName, box: box(e), px: overlapPx(trig, box(e)) }))
-        .filter(x => x.px > 0 && !encloses(x.box, trig) && onScreen(x.el))
-        .map(x => ({ name: x.name, px: x.px, at: x.box.x + ',' + x.box.y + ' ' + x.box.w + 'x' + x.box.h }));
+        .map(e => ({ name: e.getAttribute('aria-label') || (e.innerText || '').trim().slice(0, 18) || e.tagName, vis: visibleRect(e) }))
+        .filter(x => x.vis && x.vis.w >= 2 && x.vis.h >= 2 && !encloses(x.vis, trig) && overlapPx(trig, x.vis) > 0)
+        .map(x => ({ name: x.name, px: overlapPx(trig, x.vis), at: x.vis.x + ',' + x.vis.y + ' ' + x.vis.w + 'x' + x.vis.h }));
 
     const hits = [];
     if (trig && trig.w > 2 && trig.h > 2) {
@@ -103,10 +118,14 @@ const SCROLL_END = `
     const rendered = e => e && e.getClientRects().length > 0;
     const s = [...document.querySelectorAll('[data-app-action-sidebar-scroll]')].filter(rendered)[0];
     if (!s) return { applicable: false };
-    s.scrollTop = s.scrollHeight;
-    await new Promise(r => setTimeout(r, 700));
-    s.scrollTop = s.scrollHeight;
-    await new Promise(r => setTimeout(r, 700));
+    // The list lazy-loads as it is scrolled, so one jump to the bottom is not the
+    // bottom. Keep going until the scroll height stops growing.
+    let previous = -1;
+    for (let attempt = 0; attempt < 12 && s.scrollHeight !== previous; attempt++) {
+        previous = s.scrollHeight;
+        s.scrollTop = s.scrollHeight;
+        await new Promise(r => setTimeout(r, 800));
+    }
     const items = [...s.querySelectorAll('a[href^="/c/"]')];
     const last = items[items.length - 1];
     if (!last) return { applicable: false };
@@ -166,8 +185,27 @@ const CASES = [
     { name: 'zoom150-equivalent-960x633', width: 960, height: 633, zoom: 1, expanded: true },
 ]
 
+// `PLACEMENT_CASES=collapsed,narrow` runs a subset while iterating on one defect.
+const only = (process.env.PLACEMENT_CASES || '').split(',').map(x => x.trim()).filter(Boolean)
+const selected = only.length ? CASES.filter(k => only.some(o => k.name.includes(o))) : CASES
+
+// A userscript is only re-evaluated on a page load. Measuring an already-open
+// document after installing a new build silently reports the *old* build, so the
+// run starts by reloading and confirming the script is live.
+await c.send('Page.bringToFront')
+await c.send('Page.reload')
+await sleep(2500)
+await c.send('Page.bringToFront')
+await sleep(9000)
+const live = await c.run(`
+    const mount = document.querySelector('[data-ce-mount]');
+    return { mounted: !!mount, strategy: mount && mount.getAttribute('data-ce-mount') };
+`)
+console.log(`reloaded; exporter mounted=${live.mounted} strategy=${live.strategy}`)
+if (!live.mounted) throw new Error('the exporter did not mount after reload — nothing to measure')
+
 const results = []
-for (const kase of CASES) {
+for (const kase of selected) {
   try {
     await c.send('Browser.setWindowBounds', { windowId: win.windowId, bounds: { windowState: 'normal', left: 20, top: 40, width: kase.width, height: kase.height } })
     await sleep(1800)
