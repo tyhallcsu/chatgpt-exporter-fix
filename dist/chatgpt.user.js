@@ -942,11 +942,13 @@
 	}
 	var RateLimitError = class extends Error {
 		retryAfterMs;
+		retryAfterFromServer;
 		constructor(retryAfterHeader) {
 			super("Too Many Requests (429)");
 			this.name = "RateLimitError";
 			const secs = retryAfterHeader != null ? Number.parseInt(retryAfterHeader, 10) : NaN;
-			this.retryAfterMs = Number.isFinite(secs) && secs > 0 ? secs * 1e3 : 3e4;
+			this.retryAfterFromServer = Number.isFinite(secs) && secs > 0;
+			this.retryAfterMs = this.retryAfterFromServer ? secs * 1e3 : 3e4;
 		}
 	};
 	var RATE_LIMIT_HEADERS = [
@@ -20905,6 +20907,11 @@
 			return title.toLowerCase().includes(lower);
 		}
 	}
+	function describeListLoadError(error) {
+		if (error instanceof RateLimitError) return error.retryAfterFromServer ? `Rate limited by the API · wait ${Math.ceil(error.retryAfterMs / 1e3)}s and try again` : "Rate limited by the API · wait a moment and try again";
+		if (error instanceof Error && error.message) return error.message;
+		return "Failed to load conversations";
+	}
 	var ProjectSelect = ({ projects, selected, setSelected, disabled, loading }) => {
 		const { t } = useTranslation();
 		return o$5("div", {
@@ -21491,6 +21498,7 @@
 				setApiConversations(cache.items);
 				setHasMore(cache.hasMore);
 				setTotalAvailable(cache.total);
+				setError("");
 				setLoading(false);
 				refreshConversationList(cache.items, (offset, limit) => fetchConversationsPage(null, offset, limit), 100, exportAllLimit).then(({ head, total }) => {
 					if (listCache) listCache = {
@@ -21509,6 +21517,7 @@
 			setApiConversations([]);
 			setHasMore(false);
 			setTotalAvailable(null);
+			setError("");
 			setLoading(true);
 			let loadedHasMore = false;
 			let loadFailed = false;
@@ -21517,8 +21526,9 @@
 			}, (hasMore) => {
 				loadedHasMore = hasMore;
 				if (alive()) setHasMore(hasMore);
-			}, () => {
+			}, (error) => {
 				loadFailed = true;
+				if (alive()) setError(describeListLoadError(error));
 			}).then((items) => {
 				if (selectedProjectId === null && items.length > 0 && !loadFailed) listCache = {
 					limit: exportAllLimit,
@@ -21529,7 +21539,7 @@
 			}).catch((err) => {
 				if (!alive()) return;
 				console.error("Error fetching conversations:", err);
-				setError(err.message || "Failed to load conversations");
+				setError(describeListLoadError(err));
 			}).finally(() => {
 				if (alive()) setLoading(false);
 			});
