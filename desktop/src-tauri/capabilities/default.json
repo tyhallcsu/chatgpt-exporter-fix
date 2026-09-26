@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Core webview surface only. Every privileged action — opening a browser, writing a file, starting the loopback server — goes through a checked Rust command rather than a plugin permission, so the webview is never handed an open-ended capability.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

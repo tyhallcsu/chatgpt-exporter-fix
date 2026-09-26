@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ChatGPT Exporter Desktop</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <main class="shell">
+        <header class="masthead">
+            <img class="masthead__mark" src="icon.png" alt="" width="56" height="56">
+            <div class="masthead__text">
+                <h1>ChatGPT&nbsp;Exporter <span class="masthead__kind">Desktop</span></h1>
+                <p class="masthead__sub">
+                    Installs the exporter userscript into your browser. The exporter itself
+                    stays a userscript &mdash; this window is only the installer.
+                </p>
+            </div>
+            <dl class="masthead__versions">
+                <div><dt>Packaging</dt><dd id="packaging-version">&mdash;</dd></div>
+                <div><dt>Userscript</dt><dd id="userscript-version">&mdash;</dd></div>
+            </dl>
+        </header>
+
+        <section class="card card--primary">
+            <h2>1. Install a userscript manager</h2>
+            <p class="muted">
+                A manager extension is what actually runs the exporter on chatgpt.com.
+                Skip this step if you already have one.
+            </p>
+            <div class="row row--wrap" id="manager-links"></div>
+        </section>
+
+        <section class="card card--primary">
+            <h2>2. Hand it the script</h2>
+            <p class="muted">
+                Opens your browser at a local address serving the bundled script. Your
+                manager recognises the <code>.user.js</code> address and shows its own
+                install page &mdash; nothing is installed without you confirming there.
+            </p>
+            <div class="row row--wrap">
+                <button id="install-default" class="btn btn--primary">Open in default browser</button>
+                <span class="row__divider" id="browser-divider" hidden>or</span>
+                <div class="row row--wrap" id="browser-buttons"></div>
+            </div>
+            <p class="status" id="status" role="status" aria-live="polite"></p>
+            <div class="urlbar" id="urlbar" hidden>
+                <code id="install-url"></code>
+                <button id="copy-url" class="btn btn--ghost btn--small">Copy address</button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>What this build carries</h2>
+            <dl class="facts">
+                <div><dt>Script name</dt><dd id="fact-name">&mdash;</dd></div>
+                <div><dt>Version</dt><dd id="fact-version">&mdash;</dd></div>
+                <div><dt>Size</dt><dd id="fact-size">&mdash;</dd></div>
+                <div><dt>Built from commit</dt><dd id="fact-commit">&mdash;</dd></div>
+                <div><dt>Built at</dt><dd id="fact-built">&mdash;</dd></div>
+                <div class="facts__wide"><dt>SHA&#8209;256 of the bytes served</dt><dd><code id="fact-sha">&mdash;</code></dd></div>
+            </dl>
+            <p class="warn" id="integrity-warning" hidden></p>
+            <div class="row row--wrap">
+                <button id="copy-sha" class="btn btn--ghost btn--small">Copy hash</button>
+                <button id="copy-script" class="btn btn--ghost btn--small">Copy script source</button>
+                <button id="save-script" class="btn btn--ghost btn--small">Save a copy to Downloads</button>
+                <button id="check-updates" class="btn btn--ghost btn--small">Check for a newer release</button>
+            </div>
+            <p class="status" id="aux-status" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="card card--quiet">
+            <h2>What this app does not do</h2>
+            <ul class="plain">
+                <li>It never reads your browser profile, cookies, history or session &mdash; so it
+                    cannot tell you whether a manager is already installed, and does not try.</li>
+                <li>It never signs in to ChatGPT and never sees your conversations. Exporting
+                    happens in the browser, in the userscript, as it always did.</li>
+                <li>It writes nothing into a browser or an extension. Your manager's own
+                    install prompt is the only thing that installs the script.</li>
+                <li>The local address is bound to <code>127.0.0.1</code>, serves this one
+                    script at one unguessable path, and stops when you quit.</li>
+            </ul>
+        </section>
+
+        <footer class="colophon">
+            <p>
+                Exporter by
+                <a href="#" data-external="https://github.com/pionxzh/chatgpt-exporter">pionxzh</a>,
+                MIT licensed. Desktop packaging in
+                <a href="#" data-external="https://github.com/tyhallcsu/chatgpt-exporter-fix">tyhallcsu/chatgpt-exporter-fix</a>,
+                also MIT. Not affiliated with OpenAI.
+            </p>
+            <p id="signing-note" class="muted"></p>
+        </footer>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
