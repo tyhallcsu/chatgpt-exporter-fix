@@ -30,7 +30,7 @@ upstream.
 | Comparison issue | https://github.com/tyhallcsu/chatgpt-exporter-fix/issues/5 |
 | Previous private line (kept) | `review/reconcile-upstream-2.36.1` @ `ceeaa55` |
 | Superseded placement work (kept) | `wip/launcher-placement-superseded` @ `f6fcd31` |
-| Worktree | `/Users/bradbanks/Documents/GitHub/chatgpt-exporter/.claude/worktrees/chatgpt-exporter-reconcile-2362` |
+| Worktree | `~/Documents/GitHub/chatgpt-exporter/.claude/worktrees/chatgpt-exporter-reconcile-2362` |
 
 ## Artifacts
 

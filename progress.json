@@ -26,7 +26,7 @@
     "artifact_source_commit": "8f1284a",
     "preserved_previous_line": "review/reconcile-upstream-2.36.1 @ ceeaa55",
     "preserved_placement_work": "wip/launcher-placement-superseded @ f6fcd31",
-    "worktree": "/Users/bradbanks/Documents/GitHub/chatgpt-exporter/.claude/worktrees/chatgpt-exporter-reconcile-2362"
+    "worktree": "~/Documents/GitHub/chatgpt-exporter/.claude/worktrees/chatgpt-exporter-reconcile-2362"
   },
   "artifacts": {
     "review": {
