@@ -3,11 +3,11 @@
 // @name:zh-CN         ChatGPT Exporter (review build)
 // @name:zh-TW         ChatGPT Exporter (review build)
 // @namespace          pionxzh
-// @version            2.36.1-review.632.37badf7
+// @version            2.36.1-review.634.e2fa5d6
 // @author             pionxzh
-// @description        [REVIEW BUILD 37badf7 — unreleased, for local review only] Export ChatGPT conversations with one click — backup & share effortlessly!
-// @description:zh-CN  [REVIEW BUILD 37badf7 — unreleased, for local review only] 一键导出 ChatGPT 对话，轻松备份与分享
-// @description:zh-TW  [REVIEW BUILD 37badf7 — unreleased, for local review only] 一鍵導出 ChatGPT 對話，輕鬆備份與分享
+// @description        [REVIEW BUILD e2fa5d6 — unreleased, for local review only] Export ChatGPT conversations with one click — backup & share effortlessly!
+// @description:zh-CN  [REVIEW BUILD e2fa5d6 — unreleased, for local review only] 一键导出 ChatGPT 对话，轻松备份与分享
+// @description:zh-TW  [REVIEW BUILD e2fa5d6 — unreleased, for local review only] 一鍵導出 ChatGPT 對話，輕鬆備份與分享
 // @license            MIT
 // @icon               https://chatgpt.com/favicon.ico
 // @downloadURL        none
@@ -22731,7 +22731,7 @@
 			})] })]
 		});
 	};
-	_css(".ce-timestamp {\n    color: var(--color-text-tertiary, var(--text-tertiary, #8f8f8f));\n}\n\nspan[data-time-format] {\n    display: none;\n}\n\nbody[data-time-format=\"12\"] span[data-time-format=\"12\"] {\n    display: inline;\n}\n\nbody[data-time-format=\"24\"] span[data-time-format=\"24\"] {\n    display: inline;\n}\n\n.Select {\n    padding: 0 2rem 0 0.5rem;\n    width: auto;\n    min-width: 7.5rem;\n    border-radius: 4px;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Select {\n    background-color: #2f2f2f;\n    color: #fff;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\nhtml {\n    --ce-text-primary: var(--color-text-primary, var(--text-primary, #0d0d0d));\n    --ce-menu-primary: #ffffff;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #ececec);\n    --ce-border-light: #0d0d0d26;\n    --ce-hover: var(--color-token-list-hover-background, rgba(0, 0, 0, .05));\n}\n\n:is(.dark, [data-theme=\"dark\"]) {\n    --ce-text-primary: var(--color-text-primary, var(--text-primary, #ececec));\n    --ce-menu-primary: #2A2A2A;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #212121);\n    --ce-border-light: var(--color-token-border-default, var(--border-default, rgba(255, 255, 255, .15)));\n    --ce-hover: var(--color-token-list-hover-background, rgba(255, 255, 255, .1));\n}\n\n/* Define our own background in both themes — this used to lean on\n   ChatGPT's bg-menu utility class, which no longer paints one */\n.bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n.border-menu {\n    border-color: var(--ce-border-light);\n}\n\n.menu-item {\n    height: 46px;\n}\n\n.menu-item[disabled] {\n    filter: brightness(0.5);\n}\n\n.ce-nav-trigger {\n    min-width: 0;\n    border: 0;\n    color: var(--ce-text-primary);\n}\n\n.ce-nav-trigger .ce-menu-item-text {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.ce-nav-trigger-collapsed {\n    width: 32px;\n    height: 32px;\n    margin: 0 auto 0.5rem;\n    padding: 0;\n    justify-content: center;\n    gap: 0;\n    border-radius: 8px;\n    color: var(--color-text-secondary, var(--text-secondary, var(--ce-text-primary)));\n}\n\n/* ChatGPT no longer ships the `hoverable` styles these items relied on. */\n.menu-item.hoverable:not([disabled]):hover,\n.ce-nav-trigger-collapsed:hover {\n    background-color: var(--ce-hover);\n}\n\n.ce-nav-trigger-collapsed .ce-menu-item-text {\n    display: none;\n}\n\n/* --- Mount-specific trigger styling --------------------------------------\n   `data-ce-mount` records which strategy placed the menu (see main.tsx). */\n\n/* Expanded sidebar: the menu becomes the panel's last row. */\n[data-ce-mount=\"sidebar-panel\"] {\n    flex: 0 0 auto;\n    padding: 0.25rem 0.5rem 0.5rem;\n}\n\n/* Last-resort launcher, used only when no navigation anchor is rendered.\n   Stays clear of ChatGPT's own controls and below its dialogs. */\n#chatgpt-exporter-floating-root {\n    position: fixed;\n    left: 12px;\n    bottom: 12px;\n    z-index: 998;\n}\n\n#chatgpt-exporter-floating-root [data-ce-mount=\"floating\"] .ce-nav-trigger {\n    padding: 0.375rem 0.75rem;\n    border-radius: 9999px;\n    background-color: var(--ce-menu-secondary);\n    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);\n}\n\n.ce-card {\n    color: var(--ce-text-primary);\n    border-radius: 1rem;\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);\n}\n\n.ce-card .menu-item {\n    column-gap: 8px;\n    padding-inline-start: 8px;\n}\n\n/* ChatGPT's main column carries its own z-index, which beats the menu's\n   portalled Radix popper wrapper (position: fixed, z-index: auto). Raise\n   only OUR wrapper — :has keeps ChatGPT's own Radix poppers untouched —\n   and stay below the dialogs at 1000/1001. */\n[data-radix-popper-content-wrapper]:has(.ce-card) {\n    z-index: 999 !important;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .ce-card {\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);\n}\n\n.inputFieldSet {\n    display: block;\n    border-width: 2px;\n    border-style: groove;\n}\n\n.inputFieldSet legend {\n    margin-left: 4px;\n}\n\n.inputFieldSet input {\n    background-color: transparent;\n    box-shadow: none!important;\n}\n\n.row-half {\n    grid-column: auto / span 1;\n}\n\n.row-full {\n    grid-column: auto / span 2;\n}\n\n.dropdown-backdrop {\n    display: block;\n    position: fixed;\n    top: 0;\n    bottom: 0;\n    left: 0;\n    right: 0;\n    background-color: rgba(0,0,0,.5);\n    animation-name: pointerFadeIn;\n    animation-duration: .3s;\n}\n\n@keyframes fadeIn {\n    from {\n        opacity: 0;\n    }\n    to {\n        opacity: 1;\n    }\n}\n\n@keyframes slideUp {\n    from {\n        transform: translateY(100%);\n    }\n    to {\n        transform: translateY(0);\n    }\n}\n\n@keyframes pointerFadeIn {\n    from {\n        opacity: 0;\n        pointer-events: none;\n    }\n    to {\n        opacity: 1;\n        pointer-events: auto;\n    }\n}\n\n@keyframes rotate {\n    from {\n        transform: rotate(0deg);\n    }\n    to {\n        transform: rotate(360deg);\n    }\n}\n\n@keyframes circularDash {\n    0% {\n        stroke-dasharray: 1px, 200px;\n        stroke-dashoffset: 0;\n    }\n    50% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -15px;\n    }\n    100% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -125px;\n    }\n}\n");
+	_css(".ce-timestamp {\n    color: var(--color-text-tertiary, var(--text-tertiary, #8f8f8f));\n}\n\nspan[data-time-format] {\n    display: none;\n}\n\nbody[data-time-format=\"12\"] span[data-time-format=\"12\"] {\n    display: inline;\n}\n\nbody[data-time-format=\"24\"] span[data-time-format=\"24\"] {\n    display: inline;\n}\n\n.Select {\n    padding: 0 2rem 0 0.5rem;\n    width: auto;\n    min-width: 7.5rem;\n    border-radius: 4px;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Select {\n    background-color: #2f2f2f;\n    color: #fff;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\nhtml {\n    --ce-text-primary: var(--color-text-primary, var(--text-primary, #0d0d0d));\n    --ce-menu-primary: #ffffff;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #ececec);\n    --ce-border-light: #0d0d0d26;\n    --ce-hover: var(--color-token-list-hover-background, rgba(0, 0, 0, .05));\n}\n\n:is(.dark, [data-theme=\"dark\"]) {\n    --ce-text-primary: var(--color-text-primary, var(--text-primary, #ececec));\n    --ce-menu-primary: #2A2A2A;\n    --ce-menu-secondary: var(--sidebar-surface-secondary, #212121);\n    --ce-border-light: var(--color-token-border-default, var(--border-default, rgba(255, 255, 255, .15)));\n    --ce-hover: var(--color-token-list-hover-background, rgba(255, 255, 255, .1));\n}\n\n/* Define our own background in both themes — this used to lean on\n   ChatGPT's bg-menu utility class, which no longer paints one */\n.bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n:is(.dark, [data-theme=\"dark\"]) .bg-menu {\n    background-color: var(--ce-menu-primary);\n}\n\n.border-menu {\n    border-color: var(--ce-border-light);\n}\n\n.menu-item {\n    height: 46px;\n}\n\n.menu-item[disabled] {\n    filter: brightness(0.5);\n}\n\n.ce-nav-trigger {\n    min-width: 0;\n    border: 0;\n    color: var(--ce-text-primary);\n}\n\n.ce-nav-trigger .ce-menu-item-text {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.ce-nav-trigger-collapsed {\n    width: 32px;\n    height: 32px;\n    margin: 0 auto 0.5rem;\n    padding: 0;\n    justify-content: center;\n    gap: 0;\n    border-radius: 8px;\n    color: var(--color-text-secondary, var(--text-secondary, var(--ce-text-primary)));\n}\n\n/* ChatGPT no longer ships the `hoverable` styles these items relied on. */\n.menu-item.hoverable:not([disabled]):hover,\n.ce-nav-trigger-collapsed:hover {\n    background-color: var(--ce-hover);\n}\n\n.ce-nav-trigger-collapsed .ce-menu-item-text {\n    display: none;\n}\n\n/* --- Mount-specific trigger styling --------------------------------------\n   `data-ce-mount` records which strategy placed the menu (see main.tsx). */\n\n/* Expanded sidebar: the menu becomes the panel's last row. */\n[data-ce-mount=\"sidebar-panel\"] {\n    flex: 0 0 auto;\n    padding: 0.25rem 0.5rem 0.5rem;\n}\n\n/* Last-resort launcher, used only when no navigation anchor is rendered.\n   Stays clear of ChatGPT's own controls and below its dialogs. */\n#chatgpt-exporter-floating-root {\n    position: fixed;\n    left: 12px;\n    bottom: 12px;\n    z-index: 998;\n}\n\n#chatgpt-exporter-floating-root [data-ce-mount=\"floating\"] .ce-nav-trigger {\n    padding: 0.375rem 0.75rem;\n    border-radius: 9999px;\n    background-color: var(--ce-menu-secondary);\n    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);\n}\n\n.ce-card {\n    color: var(--ce-text-primary);\n    border-radius: 1rem;\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);\n}\n\n.ce-card .menu-item {\n    column-gap: 8px;\n    padding-inline-start: 8px;\n}\n\n/* ChatGPT's main column carries its own z-index, which beats the menu's\n   portalled Radix popper wrapper (position: fixed, z-index: auto). Raise\n   only OUR wrapper — :has keeps ChatGPT's own Radix poppers untouched —\n   and stay below the dialogs at 1000/1001. */\n[data-radix-popper-content-wrapper]:has(.ce-card) {\n    z-index: 999 !important;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .ce-card {\n    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);\n}\n\n.inputFieldSet {\n    display: block;\n    border-width: 2px;\n    border-style: groove;\n}\n\n.inputFieldSet legend {\n    margin-left: 4px;\n}\n\n.inputFieldSet input {\n    background-color: transparent;\n    box-shadow: none!important;\n}\n\n.row-half {\n    grid-column: auto / span 1;\n}\n\n.row-full {\n    grid-column: auto / span 2;\n}\n\n.dropdown-backdrop {\n    display: block;\n    position: fixed;\n    top: 0;\n    bottom: 0;\n    left: 0;\n    right: 0;\n    background-color: rgba(0,0,0,.5);\n    animation-name: pointerFadeIn;\n    animation-duration: .3s;\n}\n\n@keyframes fadeIn {\n    from {\n        opacity: 0;\n    }\n    to {\n        opacity: 1;\n    }\n}\n\n@keyframes slideUp {\n    from {\n        transform: translateY(100%);\n    }\n    to {\n        transform: translateY(0);\n    }\n}\n\n@keyframes pointerFadeIn {\n    from {\n        opacity: 0;\n        pointer-events: none;\n    }\n    to {\n        opacity: 1;\n        pointer-events: auto;\n    }\n}\n\n@keyframes rotate {\n    from {\n        transform: rotate(0deg);\n    }\n    to {\n        transform: rotate(360deg);\n    }\n}\n\n@keyframes circularDash {\n    0% {\n        stroke-dasharray: 1px, 200px;\n        stroke-dashoffset: 0;\n    }\n    50% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -15px;\n    }\n    100% {\n        stroke-dasharray: 100px, 200px;\n        stroke-dashoffset: -125px;\n    }\n}\n\n/* Exporter-owned layout for its mount containers. The rail is a narrow column of\n   centred icons, and the sidebar footer stacks full-width rows, so the container\n   has to match its neighbours rather than sit wherever a bare div lands. */\n[data-ce-mount=\"nav-rail\"] {\n    display: flex;\n    width: 100%;\n    justify-content: center;\n    margin-bottom: 4px;\n}\n\n[data-ce-mount=\"sidebar-footer\"] {\n    display: block;\n    width: 100%;\n}\n");
 	_css(".DialogOverlay {\n    background-color: rgba(0, 0, 0, 0.44);\n    position: fixed;\n    inset: 0;\n    z-index: 1000;\n    animation: fadeIn 150ms cubic-bezier(0.16, 1, 0.3, 1);\n}\n\n.DialogContent {\n    color: var(--ce-text-primary);\n    background-color: #f3f3f3;\n    border-radius: 6px;\n    box-shadow: hsl(206 22% 7% / 35%) 0px 10px 38px -10px, hsl(206 22% 7% / 20%) 0px 10px 20px -15px;\n    position: fixed;\n    top: 50%;\n    left: 50%;\n    transform: translate(-50%, -50%);\n    width: 90vw;\n    max-width: 560px;\n    max-height: 85vh;\n    overflow: hidden;\n    padding: 16px 24px;\n    z-index: 1001;\n    outline: none;\n    animation: contentShow 150ms cubic-bezier(0.16, 1, 0.3, 1);\n    display: flex;\n    flex-direction: column;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .DialogContent {\n    background-color: #2a2a2a;\n    border-color: #40414f;\n    border-width: 1px;\n}\n\n.DialogContent._export {\n    background-color: #ffffff;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .DialogContent._export {\n    background-color: #2a2a2a;\n}\n\n.DialogContent input[type=\"checkbox\"] {\n    border: none;\n    outline: none;\n    box-shadow: none;\n}\n\n.DialogTitle {\n    margin: 0 0 16px 0;\n    font-weight: 500;\n    color: #1a1523;\n    font-size: 20px;\n    flex-shrink: 0;\n}\n\n.DialogBody {\n    flex: 1;\n    min-height: 0;\n    overflow-y: auto;\n    overflow-x: hidden;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .DialogTitle {\n    color: #fff;\n}\n\n.Button {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    border-radius: 4px;\n    padding: 0 15px;\n    font-size: 15px;\n    line-height: 1;\n    height: 35px;\n}\n.Button.green {\n    background-color: #ddf3e4;\n    color: #18794e;\n}\n.Button.red {\n    background-color: #f9d9d9;\n    color: #a71d2a;\n}\n.Button.neutral {\n    background-color: transparent;\n    color: #6f6e77;\n    border: 1px solid #6f6e77;\n    font-size: 13px;\n    height: 26px;\n    padding: 0 8px;\n}\n.Button.green:hover {\n    background-color: #ccebd7;\n}\n.Button.neutral:hover {\n    background-color: rgba(111, 110, 119, 0.1);\n}\n:is(.dark, [data-theme=\"dark\"]) .Button.neutral {\n    color: #a0a0a8;\n    border-color: #a0a0a8;\n}\n:is(.dark, [data-theme=\"dark\"]) .Button.neutral:hover {\n    background-color: rgba(160, 160, 168, 0.1);\n}\n.Button:disabled {\n    opacity: 0.5;\n    color: #6f6e77;\n    background-color: #e0e0e0;\n    cursor: not-allowed;\n}\n.Button:disabled:hover {\n    background-color: #e0e0e0;\n}\n\n.IconButton {\n    font-family: inherit;\n    border-radius: 100%;\n    height: 25px;\n    width: 25px;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    color: #6f6e77;\n}\n.IconButton:hover {\n    background-color: rgba(0, 0, 0, 0.06);\n}\n\n.CloseButton {\n    position: absolute;\n    top: 10px;\n    right: 10px;\n}\n\n.Fieldset {\n    display: flex;\n    gap: 20px;\n    align-items: center;\n    margin-bottom: 15px;\n}\n\n.Label {\n    font-size: 15px;\n    color: #1a1523;\n    min-width: 90px;\n    text-align: right;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Label {\n    color: #fff;\n}\n\n.Input {\n    width: 100%;\n    flex: 1;\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    border-radius: 4px;\n    padding: 0 10px;\n    font-size: 15px;\n    line-height: 1;\n    color: #000;\n    background-color: #fafafa;\n    box-shadow: 0 0 0 1px #6f6e77;\n    height: 35px;\n    outline: none;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Input {\n    background-color: #2f2f2f;\n    color: #fff;\n    box-shadow: 0 0 0 1px #6f6e77;\n}\n\n.Description {\n    font-size: 13px;\n    color: #5a5865;\n    text-align: right;\n    margin-bottom: 4px;\n}\n\n:is(.dark, [data-theme=\"dark\"]) .Description {\n    color: #bcbcbc;\n}\n\n.SelectSearch {\n    width: 100%;\n    padding: 8px 16px;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    border-radius: 4px 4px 0 0;\n    background-color: transparent;\n    color: inherit;\n    font-size: 14px;\n    outline: none;\n    flex-shrink: 0;\n}\n.SelectSearch::placeholder {\n    color: #9ca3af;\n}\n\n.SelectToolbar {\n    display: flex;\n    align-items: center;\n    /* Minimum breathing room between the select-all label and the right\n       group once the ml-auto margin collapses under pressure */\n    gap: 12px;\n    padding: 12px 16px;\n    border-radius: 0;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    flex-shrink: 0;\n}\n\n/* CJK labels wrap per-character when the row is squeezed — never shrink it */\n.SelectToolbar .CheckBoxLabel {\n    white-space: nowrap;\n    flex-shrink: 0;\n}\n\n.ProjectSelect .Select {\n    width: auto;\n}\n\n.SelectList {\n    position: relative;\n    width: 100%;\n    flex: 1;\n    min-height: 120px;\n    padding: 12px 16px;\n    overflow-x: hidden;\n    overflow-y: auto;\n    border: 1px solid #6f6e77;\n    border-radius: 0 0 4px 4px;\n    white-space: nowrap;\n}\n\n.SelectItem {\n    display: flex;\n    align-items: center;\n    gap: 6px;\n    overflow: hidden;\n}\n\n.SelectItem .CheckBoxLabel {\n    flex: 1;\n    min-width: 0;\n}\n\n.SelectItem .LabelText {\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.SelectItem label, .SelectItem input {\n    cursor: pointer;\n}\n\n.SelectItem span {\n    vertical-align: middle;\n}\n\n.SelectItemMeta {\n    flex-shrink: 0;\n    font-size: 0.7rem;\n    color: #9ca3af;\n    white-space: nowrap;\n    font-variant-numeric: tabular-nums;\n    min-width: 6.5rem;\n    text-align: right;\n}\n.SelectItemMetaActive {\n    color: #6b7280;\n    font-weight: 600;\n}\n:is(.dark, [data-theme=\"dark\"]) {\n    .SelectItemMetaActive { color: #d1d5db; }\n}\n\n/* ── Sortable column header row ── */\n.SelectListHeader {\n    display: flex;\n    align-items: center;\n    padding: 0 16px;\n    border: 1px solid #6f6e77;\n    border-bottom: none;\n    background: #f9fafb;\n    user-select: none;\n    flex-shrink: 0;\n}\n\n:is(.dark, [data-theme=\"dark\"]) {\n    .SelectListHeader { background: #1f2937; }\n}\n\n.SelectListHeaderCell {\n    flex-shrink: 0;\n    font-size: 0.68rem;\n    font-weight: 600;\n    color: #9ca3af;\n    letter-spacing: 0.03em;\n    text-transform: uppercase;\n    background: transparent;\n    border: none;\n    padding: 5px 4px;\n    cursor: pointer;\n    white-space: nowrap;\n    min-width: 6.5rem;\n    text-align: right;\n}\n.SelectListHeaderCell:hover { color: #374151; }\n:is(.dark, [data-theme=\"dark\"]) {\n    .SelectListHeaderCell:hover { color: #e5e7eb; }\n}\n.SelectListHeaderCellTitle {\n    flex: 1;\n    text-align: left;\n    padding-left: 28px; /* align with checkbox label */\n}\n.SelectListHeaderCellActive {\n    color: #2563eb;\n}\n:is(.dark, [data-theme=\"dark\"]) {\n    .SelectListHeaderCellActive { color: #60a5fa; }\n}\n\n\n@media (max-width: 480px) {\n    .DialogContent { max-height: 90vh; }\n    .SelectListHeaderCell:last-child { display: none; }\n    .SelectItemMeta:last-child { display: none; }\n    .ActionBar { justify-content: flex-end; }\n    .ActionBar > .Select { width: 100%; }\n    .ActionBar > .flex-grow { display: none; }\n}\n\n@keyframes contentShow {\n    from {\n        opacity: 0;\n        transform: translate(-50%, -48%) scale(0.96);\n    }\n    to {\n        opacity: 1;\n        transform: translate(-50%, -50%) scale(1);\n    }\n}\n");
 	function useCollapsedSidebar(container, isMobile) {
 		const [isCollapsed, setIsCollapsed] = h$4(false);
@@ -22965,6 +22965,69 @@
 		if (rendered.length > 0) return rendered;
 		return documentHasLayout() ? [] : elements;
 	}
+	var SIDEBAR_FOOTER_VAR = "--sidebar-footer-height";
+	var reservedBefore = new WeakMap();
+	function pxOf(value) {
+		const n = Number.parseFloat(value);
+		return Number.isFinite(n) ? n : NaN;
+	}
+	function getSidebarFooter(scrollRoot) {
+		let owner = scrollRoot.parentElement;
+		while (owner && !owner.style?.getPropertyValue("--sidebar-footer-height")) owner = owner.parentElement;
+		if (!owner) return null;
+		const reserved = pxOf(getComputedStyle(owner).getPropertyValue(SIDEBAR_FOOTER_VAR));
+		if (!Number.isFinite(reserved) || reserved <= 0) return null;
+		const group = Array.from(owner.querySelectorAll("*")).find((element) => {
+			if (element.contains(scrollRoot) || scrollRoot.contains(element)) return false;
+			if (element.getClientRects().length === 0) return false;
+			const style = getComputedStyle(element);
+			if (style.position !== "absolute" || pxOf(style.bottom) !== 0) return false;
+			return Math.abs(element.getBoundingClientRect().height - reserved) <= 1;
+		});
+		if (!group) return null;
+		return {
+			group,
+			owner,
+			reserved
+		};
+	}
+	function reserveSidebarFooterSpace(owner, group) {
+		if (!reservedBefore.has(owner)) reservedBefore.set(owner, owner.style.getPropertyValue("--sidebar-footer-height") || null);
+		const needed = Math.ceil(group.getBoundingClientRect().height);
+		if (!Number.isFinite(needed) || needed <= 0) return;
+		if (pxOf(owner.style.getPropertyValue("--sidebar-footer-height")) === needed) return;
+		owner.style.setProperty(SIDEBAR_FOOTER_VAR, `${needed}px`);
+	}
+	function releaseSidebarFooterSpace(owner) {
+		if (!reservedBefore.has(owner)) return;
+		const original = reservedBefore.get(owner) ?? null;
+		if (original === null) owner.style.removeProperty(SIDEBAR_FOOTER_VAR);
+		else owner.style.setProperty(SIDEBAR_FOOTER_VAR, original);
+		reservedBefore.delete(owner);
+	}
+	var grownOwners = new Set();
+	function syncSidebarFooterSpace() {
+		for (const owner of grownOwners) {
+			if (!owner.isConnected) {
+				releaseSidebarFooterSpace(owner);
+				grownOwners.delete(owner);
+				continue;
+			}
+			const group = Array.from(owner.querySelectorAll(`[${MOUNT_ATTRIBUTE}="sidebar-footer"]`))[0]?.parentElement;
+			if (!group || !group.isConnected) {
+				releaseSidebarFooterSpace(owner);
+				grownOwners.delete(owner);
+				continue;
+			}
+			reserveSidebarFooterSpace(owner, group);
+		}
+	}
+	function railRowOf(element, rail) {
+		if (!rail) return null;
+		let row = element;
+		while (row && row.parentElement && row.parentElement !== rail) row = row.parentElement;
+		return row && row.parentElement === rail ? row : null;
+	}
 	function getNavMenuInsertionTarget(target) {
 		const wrapper = target.parentElement;
 		if (!wrapper || wrapper.children.length !== 1) return target;
@@ -22988,6 +23051,16 @@
 				target.prepend(container);
 			}
 		}));
+		const footers = scrollRoots.map((scrollRoot) => getSidebarFooter(scrollRoot)).filter((footer) => footer !== null);
+		if (footers.length > 0) return footers.map(({ group, owner }) => ({
+			target: group,
+			insert: (container) => {
+				container.setAttribute(MOUNT_ATTRIBUTE, "sidebar-footer");
+				group.prepend(container);
+				grownOwners.add(owner);
+				reserveSidebarFooterSpace(owner, group);
+			}
+		}));
 		const panels = scrollRoots.filter((scrollRoot) => !!scrollRoot.parentElement);
 		if (panels.length > 0) return panels.map((scrollRoot) => ({
 			target: scrollRoot,
@@ -22999,11 +23072,14 @@
 		const railMenuButtons = preferRendered(Array.from(document.querySelectorAll(RAIL_MENU_BUTTON_SELECTOR)));
 		if (railMenuButtons.length > 0) {
 			const railMenuButton = railMenuButtons[0];
+			const rail = railMenuButton.closest("[data-app-navigation-rail]");
 			return [{
 				target: railMenuButton,
 				insert: (container) => {
 					container.setAttribute(MOUNT_ATTRIBUTE, "nav-rail");
-					getNavMenuInsertionTarget(railMenuButton).before(container);
+					const row = railRowOf(railMenuButton, rail);
+					if (row) row.before(container);
+					else getNavMenuInsertionTarget(railMenuButton).before(container);
 				}
 			}];
 		}
@@ -23099,6 +23175,7 @@
 				mounts.forEach(injectNavMenu);
 				const floatingHost = document.getElementById(FLOATING_HOST_ID);
 				if (floatingHost && floatingHost.children.length === 0) floatingHost.remove();
+				syncSidebarFooterSpace();
 			};
 			for (const selector of [
 				PROFILE_BUTTON_SELECTOR,
