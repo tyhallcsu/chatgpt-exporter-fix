@@ -1,6 +1,6 @@
 [package]
 name = "chatgpt-exporter-desktop"
-version = "2.36.2"
+version = "2.36.3"
 description = "Hands the ChatGPT Exporter userscript to your browser's userscript manager."
 authors = ["Tyler Hall Tech LLC"]
 license = "MIT"

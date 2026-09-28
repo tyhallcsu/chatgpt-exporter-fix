@@ -4,12 +4,14 @@
  * stages it, plus a provenance record, for the Tauri build to embed.
  *
  * The repository tracks `dist/chatgpt.user.js`, but a tracked artifact is only
- * as fresh as the last `chore: ci build` commit — on this branch the tracked
- * copy predates the PR #400 cherry-pick and does not contain it. So the desktop
- * build never trusts `dist/`; it regenerates it here and records what it got.
+ * as fresh as the last `chore: ci build` commit, which can lag the source it is
+ * supposed to represent. So the desktop build never trusts `dist/`; it
+ * regenerates it here and records what it got. On a branch synced to an upstream
+ * release the rebuild reproduces the tracked copy byte for byte, and that
+ * agreement is itself the check.
  *
  * Side effect worth knowing: the root `vite build` runs with `emptyOutDir`, so
- * it deletes every other file in `dist/` — including the tracked review-build
+ * it deletes every other file in `dist/` — including any local `build:review`
  * artifact. This script snapshots those files first and puts them back, so the
  * working tree is left as it was found.
  *

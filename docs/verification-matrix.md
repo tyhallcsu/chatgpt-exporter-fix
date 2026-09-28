@@ -1,6 +1,102 @@
-# Verification matrix — reconciled candidate on upstream v2.36.2
+# Verification matrix
 
-**Date:** 2026-09-26
+**Updated:** 2026-09-28
+
+Two runs are recorded here. The first is the v2.36.3 upstream sync — what was
+actually checked on the current tree. The second is the 2.36.2-era browser
+acceptance run, kept as history and explicitly **not** claimed for the current
+build.
+
+---
+
+# Run 2 — sync to upstream v2.36.3 (2026-09-28)
+
+**Tree under test:** `sync/upstream-2.36.3`, product paths identical to upstream
+`e2dd598a11ed709911943368f9eb7bad0e01dee0` (`chore: ci build` for
+`userscript-v2.36.3`).
+**What changed:** the product became upstream's again. Nothing fork-specific was
+added to it.
+
+## PRODUCT DELTA FROM RELEASED UPSTREAM: ZERO
+
+| Check | Command | Result |
+|---|---|---|
+| Product paths vs released upstream | `git diff e2dd598 HEAD -- src tests dist vitest.config.ts tsconfig.json pnpm-lock.yaml CHANGELOG.md .release-please-manifest.json index.html .npmrc .editorconfig .husky scripts` | **empty** |
+| `package.json` vs released upstream | `git diff e2dd598 HEAD -- package.json` | one added line, the `build:review` script. `version`, `dependencies`, `devDependencies` are upstream's. |
+| Fork's old PR #400 variant | searched for in `src/` | **absent** — upstream's final implementation replaced it wholesale, not by reverting |
+| `navMount` / `shellSettle` / placement patch / old theme patch | searched for in `src/` | **absent** |
+| Tracked review artifact | `dist/chatgpt-exporter-review.user.js` | **removed from tracking**; regenerated on demand, gitignored |
+
+See [`upstream-comparison.md`](./upstream-comparison.md) for the full classified
+path table.
+
+## Local checks
+
+Run with the declared package manager, **pnpm 8.14.1** (`npm install pnpm@8.14.1`
+into a scratch prefix; the machine's global pnpm is 9.1.1 and was not used).
+Node 26.5.1.
+
+| Command | Exit | Result |
+|---|---|---|
+| `pnpm install --frozen-lockfile` | **0** | lockfile accepted unchanged |
+| `pnpm test` | **0** | 117 tests in 21 files, all passing (`tsc --noEmit` + Vitest) |
+| `pnpm lint` | **0** | clean |
+| `pnpm build` | **0** | `dist/chatgpt.user.js`, 587,764 bytes |
+| `pnpm run build:review` | **0** | `dist/chatgpt-exporter-review.user.js`, `@name` suffixed, `@version 2.36.3-review.<seq>.<sha>`, `@updateURL`/`@downloadURL` `none`; leaves `dist/chatgpt.user.js` untouched |
+
+## Userscript byte identity
+
+| | Value |
+|---|---|
+| Our `pnpm build` output | `dist/chatgpt.user.js` |
+| Version header | `2.36.3` |
+| Bytes | 587,764 |
+| SHA-256 | `479675436c6f9f1b4fdf9eb2979e103aa01da359e2d3926eb3e43d622a9d098a` |
+| Upstream `e2dd598:dist/chatgpt.user.js` | same bytes, same hash — `cmp` clean |
+| Verdict | **BYTE-IDENTICAL to the official upstream v2.36.3 artifact** |
+
+This is also the proof that review-build scaffolding does not leak into a normal
+build: with `REVIEW_BUILD_ID` unset, `vite.config.ts` emits upstream's bytes.
+
+## Desktop packaging
+
+| Check | Result |
+|---|---|
+| Version bumped 2.36.2 → 2.36.3 | `desktop/package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, `src-tauri/tauri.conf.json` |
+| `node scripts/prepare-userscript.mjs` | **exit 0** — builds the userscript from this repository's `src/`, does not trust `dist/` |
+| Provenance recorded | version `2.36.3`, sha256 `4796754…d098a`, 587,764 bytes, source commit `4d268ba`, `sourceClean: true` |
+| `--verify-only` re-check | **exit 0** — staged copy hashes what `metadata.json` claims, and matches `dist/` |
+| JSON/TOML/YAML parse | `desktop/package.json`, `tauri.conf.json`, `capabilities/default.json`, `metadata.json`, `desktop-release.yml` all parse |
+| Local Tauri bundle build | **not run.** Deliberate: repeated local universal Rust builds previously came close to filling this machine's disk. Cross-platform bundling is GitHub Actions' job. |
+| `cargo test --release` | **not run locally**, same reason. The workflow runs it on both platforms before bundling. |
+
+Windows and macOS artifacts, their architectures and their smoke tests are
+verified by [`desktop-release.yml`](../.github/workflows/desktop-release.yml) on
+the tag build, not here.
+
+## Not re-measured this run
+
+- **No browser acceptance run.** The current product is upstream's released
+  v2.36.3, not a fork candidate, and its UI layer is materially different from
+  the build Run 1 measured (see the note below). Nothing from Run 1's placement,
+  SPA or console tables is claimed for it.
+- **No export verified live.** Run 1's exports were blocked by a ChatGPT 429 and
+  were not retried here.
+
+---
+
+# Run 1 — reconciled candidate on upstream v2.36.2 (2026-09-26)
+
+> **History. Do not read these numbers as current.** They measure
+> `2.36.2-review.627.8f1284a`, a build whose product content was upstream v2.36.2
+> plus the fork's pre-merge PR #400 variant. Upstream has since rewritten the
+> exporter's styling, sidebar row, toggles, dialog and hover card
+> (`1b309f7`, `87b26a1`, `1757ece`, `03ebb1d`, `5cc7269`) and changed the
+> timestamp path (`5208543`). The placement, SPA and console results below are
+> therefore evidence about a superseded build. They are kept because they are what
+> retired the fork's private placement architecture, which is still the reason
+> that code is not here.
+
 **Build under test:** `2.36.2-review.627.8f1284a`
 (`dist/chatgpt-exporter-review.user.js`, SHA-256
 `596d71dc50075294c4af2084bdb2fc1d932894b0b6f8596ee956e61a81e4f60d`)
@@ -34,7 +130,7 @@ Four cold loads per condition, brand-new tab each, 1440×813 CSS viewport,
 
 **Verdict: console-only.** Identical between official and candidate, so it is not
 a regression and not something a private patch is needed for.
-`shellSettle.ts` is dropped.
+`shellSettle.ts` was dropped on this evidence.
 
 ## UI / placement — candidate
 
@@ -51,7 +147,7 @@ a regression and not something a private patch is needed for.
 | 150%-equivalent | 960×546 | 314×46 @ (14,427) | none | all ours | yes | yes | yes |
 
 - **Account / footer overlap:** none in any case. This was the original reported
-  defect; upstream v2.36.2 fixes it on its own.
+  defect; upstream v2.36.2 fixed it on its own.
 - **Narrow, drawer closed:** **not applicable.** ChatGPT renders no rail and no
   sidebar scroll area there, and offers no sidebar control of its own.
 - **Appearance:** System → dark throughout; `data-theme="dark"` observed on every
@@ -73,8 +169,9 @@ detached mounts, trigger 314×46, and a real click opens the menu.
 
 ## Exports
 
-**ChatGPT is rate limiting this account's conversation endpoints right now.** One
-bounded `api-health.mjs` observation of a single page load, no repeated probing:
+**ChatGPT was rate limiting this account's conversation endpoints during the run.**
+One bounded `api-health.mjs` observation of a single page load, no repeated
+probing:
 
 | Endpoint | Status |
 |---|---|
@@ -95,11 +192,10 @@ capture.
 | JSON / JSON (ZIP) | **BLOCKED BY CHATGPT 429** | same source endpoint |
 | Screenshot | **BLOCKED BY CHATGPT 429** | captures the rendered thread; the thread does not render |
 
-These were verified working on this build's predecessor in the previous session
-(screenshot export produced a valid ZIP with two valid PNGs, content verified at
-start, middle and end). Nothing in this reconciliation touches the export paths —
-the branch's only product change is `ExportDialog`'s error handling — so this is
-recorded as **blocked, not failed**, and not claimed as a pass.
+These were verified working on the build's predecessor in the session before —
+screenshot export produced a valid ZIP with two valid PNGs, content verified at
+start, middle and end. Recorded as **blocked, not failed**, and not claimed as a
+pass.
 
 ## Export All
 
@@ -115,29 +211,18 @@ One attempt, `export-all-probe.mjs`. Not retried.
 | Wording | the no-`Retry-After` variant, correctly: the server sent none, so no wait is quoted as if it came from the API |
 | Two-conversation ZIP | **BLOCKED BY CHATGPT 429** — not produced, not claimed |
 
-**This is PR #400's fix working live under the exact condition it was written
-for.** Screenshot: kept with the run output, not committed (it shows real
-conversation titles).
+This was the fork's pre-merge PR #400 variant working live under the exact
+condition it was written for. It is the evidence that went to upstream with the
+PR. Upstream's merged implementation, which is what ships in v2.36.3, is not the
+same code and was not measured here.
 
-## Local checks
+## Known gaps from that run
 
-Run with the declared package manager, pnpm 8.14.1.
-
-| Command | Exit | Result |
-|---|---|---|
-| `pnpm test` | 0 | 117 tests in 21 files, all passing |
-| `pnpm lint` | 0 | clean |
-| `pnpm build` | 0 | `dist/chatgpt.user.js` |
-| `pnpm run build:review` | 0 | `dist/chatgpt-exporter-review.user.js`, byte-identical on a repeat build |
-
-## Known gaps
-
-- Single-conversation exports and the two-chat Export All ZIP are **blocked by
-  ChatGPT's 429**, not verified this run.
+- Single-conversation exports and the two-chat Export All ZIP were **blocked by
+  ChatGPT's 429**, not verified.
 - Escape closes the exporter menu but returns focus to `<body>` rather than the
-  trigger (upstream behaviour, unchanged).
-- Tab from the launcher does not walk into the menu items (upstream behaviour,
-  unchanged).
-- Signed **out**, `data-theme` is absent while the page renders dark, so the menu
-  renders light on a dark page (upstream behaviour, unchanged; not reachable in
-  the owner's signed-in usage).
+  trigger (upstream behaviour at the time).
+- Tab from the launcher did not walk into the menu items (upstream behaviour at
+  the time).
+- Signed **out**, `data-theme` was absent while the page rendered dark, so the
+  menu rendered light on a dark page (upstream behaviour at the time).

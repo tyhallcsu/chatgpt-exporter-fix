@@ -1,5 +1,14 @@
 # Desktop release design
 
+> **Status, 2026-09-28.** This is the original decision record, kept as written.
+> Two of its premises have since changed, and neither changes a decision:
+> upstream merged PR #400 and released it in v2.36.3, so the product is upstream's
+> again and the packaging input is `master`, not a reconciliation branch; and the
+> stale-tracked-artifact finding below is resolved, because the tracked
+> `dist/chatgpt.user.js` is now upstream's own released build and a local `pnpm
+> build` reproduces it byte for byte. Current state is in
+> [`upstream-comparison.md`](./upstream-comparison.md).
+
 **Date:** 2026-09-26
 **Branch:** `feat/desktop-release-packaging`
 **Packaging input:** `f19f207c41c0fc1fbc23d6e3569b89919e955466` — the head of
@@ -28,6 +37,12 @@ build change, so this branch stacks on the reconciliation instead and targets it
 as its PR base. Packaging follows the product; it does not decide it.
 
 ### A finding worth acting on separately
+
+> **Resolved 2026-09-28.** The sync to upstream v2.36.3 took upstream's released
+> `dist/chatgpt.user.js` along with its source, so the tracked artifact and the
+> tree it sits in now agree, and a local `pnpm build` reproduces it exactly. The
+> decision below — that packaging rebuilds rather than trusting `dist/` — stands
+> regardless, and the agreement is now itself a drift check.
 
 `dist/chatgpt.user.js` as committed on `f19f207` is upstream's own
 `chore: ci build` output for v2.36.2. It does **not** contain the PR #400
@@ -158,10 +173,11 @@ Two details are deliberate:
   recorded hash, showing a warning if they differ. The number on screen is a
   property of the binary, not a claim copied out of a build log.
 
-The root build runs with `emptyOutDir`, which would delete the tracked
+The root build runs with `emptyOutDir`, which would delete any
 `dist/chatgpt-exporter-review.user.js` sitting beside its output. The prepare
 script snapshots and restores it, so running the desktop build leaves the
-working tree as it found it.
+working tree as it found it. (That file was tracked when this was written; since
+2026-09-28 it is a local, gitignored artifact of `pnpm run build:review`.)
 
 ### The install server
 

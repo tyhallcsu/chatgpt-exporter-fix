@@ -23,3 +23,7 @@ node_modules
 tsconfig.tsbuildinfo
 .claude/*
 !.claude/skills/
+
+# `pnpm build:review` writes a second userscript next to the tracked one. It is
+# a local review artifact, never a release, so it is not tracked.
+dist/chatgpt-exporter-review.user.js

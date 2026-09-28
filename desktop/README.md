@@ -121,8 +121,8 @@ whole tree a second time.
 Push a tag:
 
 ```bash
-git tag desktop-v2.36.2.1
-git push origin desktop-v2.36.2.1
+git tag desktop-v2.36.3.1
+git push origin desktop-v2.36.3.1
 ```
 
 `.github/workflows/desktop-release.yml` builds Windows on Windows and macOS on

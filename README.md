@@ -2,17 +2,17 @@
   <img src="assets/repository-banner.jpg" alt="Conversation lines becoming export documents, with a mint repair stitch on an indigo background." width="100%">
 </p>
 
-# ChatGPT Exporter · Repair Fork
+# ChatGPT Exporter · Desktop Builds
 
-**Keep conversations portable. Keep the exporter working.**
+**Keep conversations portable. Install the exporter without hunting for a userscript.**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-source-3178c6?style=flat-square)](src/) [![MIT license](https://img.shields.io/badge/License-MIT-6ac9aa?style=flat-square)](LICENSE) [![Windows and macOS builds](https://img.shields.io/badge/Download-Windows%20%C2%B7%20macOS-6ac9aa?style=flat-square)](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/latest) [![Userscript](https://img.shields.io/badge/Install-Tampermonkey-59636e?style=flat-square)](#userscript-only)
 
 [Download](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/latest) · [Install this fork](#install-this-fork) · [What this fork adds](#what-this-fork-adds) · [Formats](#-supported-formats) · [Examples](#-example) · [Batch export](#-export-multiple-conversations) · [Development](#development)
 
-This fork of [pionxzh/chatgpt-exporter](https://github.com/pionxzh/chatgpt-exporter) tracks upstream **v2.36.2** and adds Windows and macOS installers for the userscript, plus upstream [PR #400](https://github.com/pionxzh/chatgpt-exporter/pull/400)'s conversation-list error handling. The userscript exports conversations as text, HTML, Markdown, PNG, or JSON; batch export also supports JSON ZIP.
+This fork of [pionxzh/chatgpt-exporter](https://github.com/pionxzh/chatgpt-exporter) packages upstream **v2.36.3** as Windows and macOS installers. The userscript itself is upstream's, unmodified: **the product-code delta from the official upstream release is zero.** It exports conversations as text, HTML, Markdown, PNG, or JSON; batch export also supports JSON ZIP.
 
-This fork previously carried its own navigation, conversation-detection and theme repairs. Upstream shipped equivalent fixes in v2.36.2, so those private versions were dropped rather than maintained in parallel — see [`docs/2.36.2-reconciliation.md`](docs/2.36.2-reconciliation.md).
+This fork used to carry its own repairs — navigation, conversation detection, theme, and conversation-list error reporting in Export All. Upstream now ships all of them. The last one reached upstream as [PR #400](https://github.com/pionxzh/chatgpt-exporter/pull/400), which was **merged on 2026-09-26 and released in v2.36.3**; the others were superseded by upstream's own fixes in v2.36.2. So there is no bug fix here that upstream lacks. What is here is the packaging: see [`docs/upstream-comparison.md`](docs/upstream-comparison.md) for the path-by-path proof and [`docs/2.36.2-reconciliation.md`](docs/2.36.2-reconciliation.md) for what was dropped and why.
 
 ## Install this fork
 
@@ -41,33 +41,40 @@ Fully supported, and nothing about the desktop helper is required.
 4. In Tampermonkey, open **Dashboard → Utilities → Import from file** and choose the file.
 5. Reload ChatGPT. Look for **Export** in the sidebar or its icon in the collapsed rail.
 
-> **Which code is in the release?** `master` is it. The artifacts published in [desktop-v2.36.2.1](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/tag/desktop-v2.36.2.1) are built from this source — upstream v2.36.2 plus upstream [PR #400](https://github.com/pionxzh/chatgpt-exporter/pull/400), and nothing else. The tracked [`dist/chatgpt.user.js`](dist/chatgpt.user.js) is the same bytes as the release's `chatgpt-exporter-2.36.2.user.js`, SHA-256 `9daa710bc102bb5dc62f574958581efd2029ea68cd5f6fb60ac7d3bfe8475f93`, reproduced independently on Ubuntu, macOS and Windows.
+> **Which code is in the release?** `master` is it, and for the userscript that means upstream's. The tracked [`dist/chatgpt.user.js`](dist/chatgpt.user.js) is byte-for-byte the official upstream v2.36.3 artifact — SHA-256 `479675436c6f9f1b4fdf9eb2979e103aa01da359e2d3926eb3e43d622a9d098a`, 587,764 bytes — and `pnpm build` from this tree reproduces exactly those bytes. Every desktop release rebuilds the script from `src/` rather than trusting the tracked copy, and records the version, hash and source commit it got.
+>
+> The earlier [desktop-v2.36.2.1](https://github.com/tyhallcsu/chatgpt-exporter-fix/releases/tag/desktop-v2.36.2.1) release remains available and untouched. It carried upstream v2.36.2 plus the pre-merge version of PR #400 (`chatgpt-exporter-2.36.2.user.js`, SHA-256 `9daa710bc102bb5dc62f574958581efd2029ea68cd5f6fb60ac7d3bfe8475f93`).
 
 The upstream GreasyFork and raw-GitHub links below install the upstream version, not this fork's builds.
 
 ## What this fork adds
 
+Packaging, not product.
+
 | Area | Implementation / evidence |
 |---|---|
-| Conversation-list errors surfaced in Export All | [`src/ui/ExportDialog.tsx`](src/ui/ExportDialog.tsx) · [tests](tests/export-dialog-list-load.test.tsx) |
 | Windows and macOS installers | [`desktop/`](desktop/) · [packaging design](docs/desktop-release-design.md) |
-| What was dropped, and why | [reconciliation notes](docs/2.36.2-reconciliation.md) · [upstream comparison](docs/upstream-comparison.md) |
-| What was verified, and how | [verification matrix](docs/verification-matrix.md) |
+| Release build, verification and checksums | [`.github/workflows/desktop-release.yml`](.github/workflows/desktop-release.yml) |
+| Real userscript-manager test tier | [`.claude/skills/browser-test/`](.claude/skills/browser-test/) — Tampermonkey's own matching, grants, run-at and update behaviour |
+| Proof the product delta is zero | [upstream comparison](docs/upstream-comparison.md) · [verification matrix](docs/verification-matrix.md) |
+| What was dropped, and why | [reconciliation notes](docs/2.36.2-reconciliation.md) |
 
-Everything else is upstream v2.36.2 unmodified. The only source difference from
-upstream's `userscript-v2.36.2` tag is PR #400's error handling in `src/api.ts`
-and `src/ui/ExportDialog.tsx`, with its tests. Upstream merged PR #400 on
-2026-09-26; this fork carries it ahead of the upstream release that will contain
-it.
+**The userscript is upstream's, unmodified.** `git diff` against upstream's
+released v2.36.3 tree is empty across `src/`, `tests/`, `dist/`, `pnpm-lock.yaml`,
+`vitest.config.ts`, `tsconfig.json`, `CHANGELOG.md` and
+`.release-please-manifest.json`; `package.json` differs by one added line, a
+`build:review` script. Nothing in this repository fixes a bug that upstream still
+has.
 
-Known limitations: very long PNG exports can exceed renderer limits, and API rate
-limits can delay the conversation list — which is what PR #400 makes visible
-instead of showing a silently short list. The examples and screenshots below are
-inherited upstream material, not new captures of this fork.
+Known limitations, inherited from upstream: very long PNG exports can exceed
+renderer limits, and API rate limits can delay the conversation list — upstream
+now reports that in the Export All dialog rather than showing a silently short
+list. The examples and screenshots below are inherited upstream material, not new
+captures.
 
 ## Development
 
-Use the pinned **pnpm 8.14.1** and a Node version compatible with the checked-in dependencies (the package declares Node >=20). See [CONTRIBUTING.md](CONTRIBUTING.md) for setup details, and [`docs/2.36.2-reconciliation.md`](docs/2.36.2-reconciliation.md) for how this branch relates to upstream.
+Use the pinned **pnpm 8.14.1** and a Node version compatible with the checked-in dependencies (the package declares Node >=20). See [CONTRIBUTING.md](CONTRIBUTING.md) for setup details, and [`docs/upstream-comparison.md`](docs/upstream-comparison.md) for how this branch relates to upstream.
 
 ```bash
 pnpm install --frozen-lockfile
@@ -76,7 +83,7 @@ pnpm lint
 pnpm build
 ```
 
-`pnpm test` runs TypeScript checking and Vitest. The build writes the tracked `dist/chatgpt.user.js`; source changes should include a rebuilt bundle. Presentation-only edits do not require replacing that bundle.
+`pnpm test` runs TypeScript checking and Vitest. The build writes the tracked `dist/chatgpt.user.js`, and on a tree synced to an upstream release it should reproduce that file byte for byte — if it does not, something has drifted into the product. `pnpm run build:review` writes a separate, deliberately un-releasable `dist/chatgpt-exporter-review.user.js` for looking at an unreleased tree in a real userscript manager; it is untracked, and it changes nothing about a normal build.
 
 ## Upstream project and installation
 
