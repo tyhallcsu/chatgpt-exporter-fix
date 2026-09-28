@@ -4,8 +4,7 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApiConversationItem, ApiProjectInfo } from '../src/api'
 
-// Tampermonkey injects the GM_* APIs at runtime; absent is what the page sees
-// before that, and `ScriptStorage` already falls back to localStorage for it.
+// Without the GM_* APIs, `ScriptStorage` falls back to localStorage.
 vi.mock('vite-plugin-monkey/dist/client', () => ({
     unsafeWindow: globalThis,
     monkeyWindow: globalThis,
@@ -17,27 +16,6 @@ vi.mock('vite-plugin-monkey/dist/client', () => ({
     GM_addValueChangeListener: undefined,
     GM_removeValueChangeListener: undefined,
     GM_xmlhttpRequest: undefined,
-}))
-
-const passThrough = ({ children }: { children?: unknown }) => <>{children}</>
-
-// Radix and react-i18next ship prebundled against React, which cannot share
-// preact's hook state. Neither takes part in loading the conversation list, so
-// the dialog chrome renders as plain nodes and `t` returns its key.
-vi.mock('@radix-ui/react-dialog', () => ({
-    Root: passThrough,
-    Trigger: passThrough,
-    Portal: passThrough,
-    Overlay: passThrough,
-    Content: passThrough,
-    Close: passThrough,
-    Title: passThrough,
-    Description: passThrough,
-}))
-
-vi.mock('react-i18next', () => ({
-    useTranslation: () => ({ t: (key: string) => key }),
-    initReactI18next: { type: '3rdParty', init: () => {} },
 }))
 
 // ---------------------------------------------------------------------------
@@ -111,6 +89,7 @@ function stubApi({ list = [], projectList = [], projects = [] }: {
 // Rendering and queries
 // ---------------------------------------------------------------------------
 
+// The dialog portals into document.body, so queries search there.
 let host: HTMLDivElement
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0))
@@ -128,9 +107,7 @@ async function openDialog() {
     const { ExportDialog } = await import('../src/ui/ExportDialog')
     await act(async () => {
         render(
-            <ExportDialog format="markdown" open onOpenChange={() => {}}>
-                <button type="button">trigger</button>
-            </ExportDialog>,
+            <ExportDialog format="markdown" open onOpenChange={() => {}} />,
             host,
         )
     })
@@ -138,36 +115,36 @@ async function openDialog() {
 }
 
 function button(label: string) {
-    const found = [...host.querySelectorAll('button')].find(b => b.textContent?.trim() === label)
-    if (!found) throw new Error(`no ${label} button: ${host.textContent}`)
+    const found = [...document.body.querySelectorAll('button')].find(b => b.textContent?.trim() === label)
+    if (!found) throw new Error(`no ${label} button: ${document.body.textContent}`)
     return found as HTMLButtonElement
 }
 
 /** The `Error: …` row the list renders, or '' when the list shows no error */
 function listError() {
-    const row = [...host.querySelectorAll('.SelectList .SelectItem')]
+    const row = [...document.body.querySelectorAll('.ce-select-list .ce-select-item')]
         .find(el => el.textContent?.startsWith('Error:'))
     return row?.textContent ?? ''
 }
 
 function conversationRows() {
-    return [...host.querySelectorAll('.SelectList .SelectItem')]
+    return [...document.body.querySelectorAll('.ce-select-list .ce-select-item')]
         .filter(el => el.querySelector('input[type="checkbox"]'))
 }
 
 function conversationTitles() {
-    return conversationRows().map(el => el.querySelector('.LabelText')?.textContent ?? '')
+    return conversationRows().map(el => el.querySelector('.ce-checkbox-label')?.textContent ?? '')
 }
 
 /** The `selected / shown` counter above the list */
 function counter() {
-    return [...host.querySelectorAll('*')]
+    return [...document.body.querySelectorAll('*')]
         .map(el => el.textContent?.trim() ?? '')
         .find(text => /^\d+ \/ \d+$/.test(text)) ?? ''
 }
 
 function projectSelect() {
-    const select = host.querySelector('.ProjectSelect select')
+    const select = document.body.querySelector('.ce-project-select select')
     if (!select) throw new Error('no project select')
     return select as HTMLSelectElement
 }
@@ -189,7 +166,7 @@ async function chooseProject(id: string) {
 
 async function checkFirstConversation() {
     const box = conversationRows()[0]?.querySelector('input[type="checkbox"]') as HTMLInputElement | null
-    if (!box) throw new Error(`no conversation to select: ${host.textContent}`)
+    if (!box) throw new Error(`no conversation to select: ${document.body.textContent}`)
     box.checked = true
     await fire(box)
 }
@@ -213,15 +190,11 @@ afterEach(() => {
 
 describe('export All conversation-list load', () => {
     it('shows a rate-limited list as an error, not as an empty account', async () => {
-        // The failure that shipped: page one of the list is throttled.
         stubApi({ list: [tooManyRequests('60')] })
 
         await openDialog()
 
-        // `fetchAllConversations` resolves with what it had rather than
-        // rejecting, so only its onError callback can tell the dialog that this
-        // empty list is not the account. Without that the rows below are all the
-        // user sees, and they are what a genuinely empty account looks like.
+        // Without the error this looks like an account with no conversations.
         expect(counter()).toBe('0 / 0')
         expect(conversationTitles()).toEqual([])
         expect(listError()).toMatch(/rate limited/i)
@@ -230,7 +203,7 @@ describe('export All conversation-list load', () => {
         expect(button('Export').disabled).toBe(true)
     })
 
-    it('keeps the conversations it did load visible under the error', async () => {
+    it('keeps the conversations it did load visible and exportable under the error', async () => {
         const first = Array.from({ length: 100 }, (_, i) => item(`c${i}`))
         stubApi({ list: [page(first, 250), tooManyRequests('30')] })
 
@@ -239,11 +212,13 @@ describe('export All conversation-list load', () => {
         expect(conversationTitles()).toHaveLength(100)
         expect(conversationTitles()).toContain('c0')
         expect(listError()).toMatch(/rate limited/i)
+
+        await checkFirstConversation()
+        expect(button('Export').disabled).toBe(false)
     })
 
     it('does not quote our own fallback as the wait the server asked for', async () => {
-        // No Retry-After: RateLimitError substitutes 30 s for the queue's own
-        // backoff, which is not a promise the API made.
+        // Without Retry-After, the 30s wait is our fallback, not the server's.
         stubApi({ list: [tooManyRequests()] })
 
         await openDialog()
@@ -252,7 +227,7 @@ describe('export All conversation-list load', () => {
         expect(listError()).not.toContain('30')
     })
 
-    it('clears the error when the next load succeeds, re-enabling Export', async () => {
+    it('clears the error when the next load succeeds', async () => {
         stubApi({
             list: [tooManyRequests('60')],
             projectList: [json({ items: [item('p1'), item('p2')], cursor: null })],
@@ -261,19 +236,11 @@ describe('export All conversation-list load', () => {
 
         await openDialog()
         expect(listError()).toMatch(/rate limited/i)
-        expect(button('Export').disabled).toBe(true)
 
         await chooseProject('proj-1')
 
-        // The load that succeeded owns the view now, so the old error is gone
         expect(listError()).toBe('')
         expect(conversationTitles()).toEqual(['p1', 'p2'])
-
-        // Export is gated on `!!error` as well as the selection, so a stale
-        // error would keep it disabled over a list that loaded fine
-        expect(button('Export').disabled).toBe(true)
-        await checkFirstConversation()
-        expect(button('Export').disabled).toBe(false)
     })
 
     it('does not let a superseded load write over the current scope', async () => {
