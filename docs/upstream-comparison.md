@@ -28,7 +28,8 @@ tooling, and its own documentation and release policy — and nothing else.
 | Upstream master at sync time | `4c8fe6ea01d58a59bc59aea9ba1421fee7d80969` |
 | Deliberately excluded | `f9d9e4c` *(perf: compile markdown to HTML with micromark directly)* and `4c8fe6e` *(fix: keep assistant text as written in markdown and text exports)* — newer than the release, unreleased |
 | Fork master before this sync | `8c5d639f366d7db2cc638db948ab36af2afc939e` |
-| Previous private lines (kept) | `review/reconcile-upstream-2.36.2` @ `536f0dd`, `review/reconcile-upstream-2.36.1` @ `ceeaa55`, `wip/launcher-placement-superseded` @ `f6fcd31` |
+| Previous lines on `origin` (kept) | `review/reconcile-upstream-2.36.2` @ `536f0dd`, `review/reconcile-upstream-2.36.1` @ `ceeaa55` |
+| Superseded placement work | `wip/launcher-placement-superseded` @ `f6fcd31` — **local only, never pushed**, so it cannot be fetched from this repository |
 
 Why `e2dd598` and not the tag: the release tag points at the version-bump commit,
 whose `dist/chatgpt.user.js` is still the 2.36.2 build. The 2.36.3 artifact is

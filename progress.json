@@ -32,9 +32,9 @@
     ],
     "fork_master_before_sync": "8c5d639f366d7db2cc638db948ab36af2afc939e",
     "preserved_lines": [
-      "review/reconcile-upstream-2.36.2 @ 536f0dd",
-      "review/reconcile-upstream-2.36.1 @ ceeaa55",
-      "wip/launcher-placement-superseded @ f6fcd31"
+      "review/reconcile-upstream-2.36.2 @ 536f0dd — on origin",
+      "review/reconcile-upstream-2.36.1 @ ceeaa55 — on origin",
+      "wip/launcher-placement-superseded @ f6fcd31 — LOCAL ONLY, never pushed; not fetchable from origin"
     ],
     "issue": "https://github.com/tyhallcsu/chatgpt-exporter-fix/issues/5",
     "upstream_pr": "https://github.com/pionxzh/chatgpt-exporter/pull/400",
