@@ -29,7 +29,8 @@ newer userscript release lands, repeat the sync and cut the next `desktop-v*` ta
 | Fork master before the sync | `8c5d639f366d7db2cc638db948ab36af2afc939e` |
 | Sync branch | `sync/upstream-2.36.3` |
 | Comparison issue | https://github.com/tyhallcsu/chatgpt-exporter-fix/issues/5 |
-| Previous private lines (kept) | `review/reconcile-upstream-2.36.2` @ `536f0dd` · `review/reconcile-upstream-2.36.1` @ `ceeaa55` · `wip/launcher-placement-superseded` @ `f6fcd31` |
+| Previous lines on `origin` (kept) | `review/reconcile-upstream-2.36.2` @ `536f0dd` · `review/reconcile-upstream-2.36.1` @ `ceeaa55` |
+| Superseded placement work | `wip/launcher-placement-superseded` @ `f6fcd31` — **local only, never pushed.** Not on `origin` and not reachable from any remote ref, so the docs that cite it point at nothing a reader of this repository can fetch. It is the record of the private launcher architecture that upstream `11de3cd` superseded. Push it if that record should be public. |
 | Worktree | `<repo>/.claude/worktrees/chatgpt-exporter-upstream-2363` |
 
 ## Artifacts
