@@ -391,7 +391,7 @@ jobs:
           windows_signed="$(cat incoming/desktop-windows/signed.txt)"
           macos_signed="$(cat incoming/desktop-macos/signed.txt)"
           {
-            echo "Desktop installers for the private ChatGPT Exporter repair fork."
+            echo "Windows and macOS installers for the official ChatGPT Exporter userscript."
             echo
             echo "| | |"
             echo "| --- | --- |"
@@ -432,9 +432,11 @@ jobs:
             echo "### Upstream"
             echo
             echo "ChatGPT Exporter is by [pionxzh](https://github.com/pionxzh/chatgpt-exporter), MIT licensed."
-            echo "This fork carries upstream v${USERSCRIPT_VERSION} plus upstream PR #400, which surfaces"
-            echo "conversation-list errors in Export All and is still open upstream. When it merges,"
-            echo "this fork's product delta returns to zero."
+            echo "The userscript in this release is upstream v${USERSCRIPT_VERSION}, unmodified: this fork"
+            echo "carries no product changes of its own. Its conversation-list error handling in"
+            echo "Export All reached upstream as [PR #400](https://github.com/pionxzh/chatgpt-exporter/pull/400),"
+            echo "which is merged and shipped upstream. What this fork adds is the packaging around"
+            echo "the script — these installers, their verification and their release notes."
           } > release-notes.md
           cat release-notes.md
 
